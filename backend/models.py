@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, date
 
-from sqlalchemy import JSON, Column, Date, DateTime, Float, ForeignKey, String, Integer
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Float, ForeignKey, String, Integer
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -31,6 +31,34 @@ class User(Base):
 
     sessions = relationship("ExerciseSession", back_populates="user", cascade="all, delete-orphan")
     workout_plans = relationship("WorkoutPlan", back_populates="user", cascade="all, delete-orphan")
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    onboarding_complete = Column(Boolean, default=False, nullable=False)
+
+
+class UserProfile(Base):
+    """Stores onboarding profile details collected during user setup."""
+
+    __tablename__ = "user_profiles"
+
+    id = Column(String(36), primary_key=True, default=_uuid_str)
+    user_id = Column(String(36), ForeignKey("users.id"), unique=True, nullable=False)
+    age = Column(Integer, nullable=False)
+    gender = Column(String(20), nullable=True)
+    height_cm = Column(Float, nullable=False)
+    weight_kg = Column(Float, nullable=False)
+    bmi = Column(Float, nullable=False)
+    fitness_level = Column(String(20), nullable=False)
+    goal = Column(String(50), nullable=False)
+    has_equipment = Column(Boolean, nullable=False, default=False)
+    equipment_list = Column(JSON, nullable=True, default=list)
+    days_per_week = Column(Integer, nullable=False)
+    workout_duration_minutes = Column(Integer, nullable=False)
+    preferred_time = Column(String(50), nullable=False)
+    onboarding_complete = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="profile")
 
 
 class ExerciseSession(Base):

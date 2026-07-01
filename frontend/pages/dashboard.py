@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 import httpx
 import pandas as pd
 import streamlit as st
@@ -26,9 +24,16 @@ def _get_backend_url() -> str:
     return st.secrets.get("backend_url", "http://localhost:8000")
 
 
+def _get_headers() -> dict[str, str]:
+    token = st.session_state.get("token")
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
 def _fetch_api(path: str) -> dict | None:
     try:
-        response = httpx.get(path, timeout=10.0)
+        response = httpx.get(path, headers=_get_headers(), timeout=10.0)
         response.raise_for_status()
         return response.json()
     except Exception:
@@ -41,12 +46,11 @@ def render() -> None:
     st.write("Track your workout history, posture accuracy, and improvements over time.")
 
     backend_url = _get_backend_url().rstrip("/")
-    summary = _fetch_api(f"{backend_url}/api/analytics/summary") or {}
-    recent_payload = _fetch_api(f"{backend_url}/api/analytics/recent") or {}
-    recent_sessions = recent_payload.get("recent_sessions", [])
+    summary = _fetch_api(f"{backend_url}/analytics/summary") or {}
+    recent_sessions = _fetch_api(f"{backend_url}/sessions/recent/30") or []
 
     current_streak_days, best_streak_days = calculate_streak(recent_sessions)
-    avg_accuracy = float(summary.get("average_accuracy", 0.0))
+    avg_accuracy = float(summary.get("avg_accuracy", 0.0))
     total_sessions = int(summary.get("total_sessions", 0))
     total_reps = int(summary.get("total_reps", 0))
 
@@ -55,19 +59,13 @@ def render() -> None:
     exercise_data = calculate_by_exercise(recent_sessions)
 
     delta = 0.0
-    improving = False
     if len(trend_data) >= 2:
         delta = trend_data[-1]["accuracy"] - trend_data[-2]["accuracy"]
-        improving = delta >= 0
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total sessions", total_sessions)
     col2.metric("Total reps", total_reps)
-    col3.metric(
-        "Avg accuracy",
-        f"{avg_accuracy:.1f}%",
-        delta=f"{delta:+.1f}%",
-    )
+    col3.metric("Avg accuracy", f"{avg_accuracy:.1f}%", delta=f"{delta:+.1f}%")
     col4.metric("Streak", f"{current_streak_days} days")
 
     chart_col1, chart_col2 = st.columns(2)
@@ -79,9 +77,9 @@ def render() -> None:
     gauge_col, table_col = st.columns(2)
     gauge_col.plotly_chart(make_accuracy_gauge(avg_accuracy), use_container_width=True)
 
-    if recent_sessions:
+    if trend_data:
         table_data = []
-        for session in sorted(recent_sessions, key=lambda item: item.get("created_at", ""), reverse=True)[:10]:
+        for session in sorted(trend_data, key=lambda item: item.get("created_at", ""), reverse=True)[:10]:
             table_data.append(
                 {
                     "Date": session.get("created_at", "")[:10],
@@ -97,5 +95,5 @@ def render() -> None:
     else:
         table_col.info("No recent session data available to display.")
 
-    if summary is None or recent_payload is None:
+    if summary is None or trend_data is None:
         st.warning("Unable to load analytics data from the backend. Check your backend URL and authentication settings.")

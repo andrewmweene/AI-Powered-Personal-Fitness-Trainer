@@ -3,7 +3,7 @@
 from fastapi import FastAPI  # type: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import analytics, recommendations, sessions, users
+from .routers import analytics, onboarding, recommendations, sessions, users
 from .database import Base, engine
 
 
@@ -19,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(users, prefix="/users", tags=["users"])
+app.include_router(onboarding, prefix="/onboarding", tags=["onboarding"])
 app.include_router(sessions, prefix="/sessions", tags=["sessions"])
 app.include_router(analytics, prefix="/analytics", tags=["analytics"])
 app.include_router(recommendations, prefix="/recommendations", tags=["recommendations"])
