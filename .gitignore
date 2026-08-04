@@ -1,0 +1,28 @@
+# Python environment
+.venv/
+
+# Local environment variables
+.env
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest cache
+.pytest_cache/
+
+# Vite / frontend build output
+frontend/dist/
+
+# Node modules
+frontend/node_modules/
+
+# IDE files
+.vscode/
+
+# MacOS
+.DS_Store
+
+# Logs
+*.log

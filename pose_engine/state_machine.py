@@ -11,6 +11,9 @@ class ExerciseStateMachine:
     STATE_REST = "REST"
     STATE_TRANSITION = "TRANSITION"
     STATE_COMPLETE = "COMPLETE"
+    REST = STATE_REST
+    TRANSITION = STATE_TRANSITION
+    COMPLETE = STATE_COMPLETE
 
     def __init__(self) -> None:
         self.current_state = self.STATE_REST
@@ -39,13 +42,13 @@ class ExerciseStateMachine:
             self.incorrect_count += 1
             self.current_state = new_state
 
-        self._update_cycle_flags(previous_state, self.current_state)
-
         if self._completed_rep_cycle(previous_state, self.current_state):
             self.correct_count += 1
             rep_completed = True
             self._saw_complete = False
             self._cycle_started = False
+
+        self._update_cycle_flags(previous_state, self.current_state)
 
         self.last_activity_time = now
         return self.current_state, rep_completed
@@ -57,6 +60,13 @@ class ExerciseStateMachine:
         self._cycle_started = False
 
     def _state_from_angle(self, angle: float, thresholds: dict[str, float]) -> str:
+        if {"rest", "transition", "complete"}.issubset(thresholds):
+            if angle >= thresholds["rest"]:
+                return self.STATE_REST
+            if angle <= thresholds["complete"]:
+                return self.STATE_COMPLETE
+            return self.STATE_TRANSITION
+
         rest_min = thresholds["rest_min"]
         rest_max = thresholds["rest_max"]
         transition_min = thresholds["transition_min"]
