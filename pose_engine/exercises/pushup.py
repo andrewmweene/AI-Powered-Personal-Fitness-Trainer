@@ -12,6 +12,10 @@ class PushUp(BaseExercise):
         """Return the landmarks required to evaluate a push-up."""
         return [11, 13, 15, 12, 14, 16, 23, 24]
 
+    def get_angle_landmarks(self) -> list[int]:
+        """Use shoulder-elbow-wrist for the push-up elbow angle."""
+        return [11, 13, 15]
+
     def get_angle_thresholds(self) -> dict[str, float]:
         """Return thresholds for push-up motion phases."""
         return {

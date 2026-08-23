@@ -1,7 +1,7 @@
 /**
  * Home page with login and register tabs.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login as loginApi, register as registerApi, getMe } from '../api/auth.js';
 import { getStatus } from '../api/onboarding.js';
@@ -11,12 +11,31 @@ import Button from '../components/ui/Button.jsx';
 
 export default function Home() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, token } = useAuth();
   const [tab, setTab] = useState('login');
   const [form, setForm] = useState({ username: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const redirectIfLoggedIn = async () => {
+      try {
+        const statusData = await getStatus();
+        if (statusData.onboarding_complete) {
+          navigate('/dashboard', { replace: true });
+        } else {
+          navigate('/onboarding', { replace: true });
+        }
+      } catch (error) {
+        navigate('/onboarding', { replace: true });
+      }
+    };
+
+    redirectIfLoggedIn();
+  }, [token, navigate]);
 
   const handleChange = (field) => (event) => {
     setForm({ ...form, [field]: event.target.value });

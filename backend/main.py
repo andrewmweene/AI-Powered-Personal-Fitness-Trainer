@@ -1,9 +1,13 @@
 """FastAPI application entry point for the AI Personal Trainer backend."""
 
 from fastapi import FastAPI  # type: ignore[reportMissingImports]
+import logging
+
+# Enable debug logging for local development to aid troubleshooting.
+logging.basicConfig(level=logging.DEBUG)
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import analytics, onboarding, recommendations, sessions, users
+from .routers import analytics, onboarding, recommendations, sessions, users, pose
 from .database import Base, engine
 
 
@@ -23,6 +27,7 @@ app.include_router(onboarding, prefix="/onboarding", tags=["onboarding"])
 app.include_router(sessions, prefix="/sessions", tags=["sessions"])
 app.include_router(analytics, prefix="/analytics", tags=["analytics"])
 app.include_router(recommendations, prefix="/recommendations", tags=["recommendations"])
+app.include_router(pose, prefix="/pose", tags=["pose"])
 
 
 @app.on_event("startup")

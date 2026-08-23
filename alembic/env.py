@@ -42,3 +42,4 @@ if context.is_offline_mode():
         context.run_migrations()
 else:
     run_migrations_online()
+

@@ -12,6 +12,10 @@ class Squat(BaseExercise):
         """Return the landmarks required to evaluate a squat."""
         return [23, 25, 27, 11, 0]
 
+    def get_angle_landmarks(self) -> list[int]:
+        """Use hip-knee-ankle for the squat joint angle."""
+        return [23, 25, 27]
+
     def get_angle_thresholds(self) -> dict[str, float]:
         """Return squat-specific thresholds for state transitions."""
         return {

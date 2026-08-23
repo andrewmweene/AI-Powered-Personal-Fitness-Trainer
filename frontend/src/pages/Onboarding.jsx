@@ -1,10 +1,10 @@
 /**
  * Onboarding wizard with body profile, goal, equipment, and availability steps.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { completeOnboarding } from '../api/onboarding.js';
+import { completeOnboarding, getStatus } from '../api/onboarding.js';
 import AlertBanner from '../components/ui/AlertBanner.jsx';
 import Button from '../components/ui/Button.jsx';
 import MetricCard from '../components/ui/MetricCard.jsx';
@@ -26,6 +26,21 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(2);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const redirectIfComplete = async () => {
+      try {
+        const statusData = await getStatus();
+        if (statusData.onboarding_complete) {
+          navigate('/dashboard', { replace: true });
+        }
+      } catch (error) {
+        // Ignore and allow user to continue onboarding if the status check fails.
+      }
+    };
+
+    redirectIfComplete();
+  }, [navigate]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     age: '',

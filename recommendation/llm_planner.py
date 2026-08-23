@@ -8,10 +8,37 @@ import os
 import re
 from typing import Any
 
-from google import generativeai as genai
+try:
+    from google import genai as google_genai
+except ImportError:  # pragma: no cover - compatibility fallback
+    google_genai = None
 
 API_KEY = os.getenv("GEMINI_API_KEY", "")
-genai.configure(api_key=API_KEY)
+
+
+def _load_genai_module() -> Any:
+    """Return the supported Gemini SDK when available, otherwise the legacy client."""
+    if google_genai is not None:
+        return google_genai
+
+    try:
+        import google.generativeai as legacy_genai  # type: ignore
+    except ImportError:  # pragma: no cover - compatibility fallback
+        return None
+    return legacy_genai
+
+
+def get_gemini_client(api_key: str) -> Any:
+    """Create a Gemini client using the current SDK if installed."""
+    genai_module = _load_genai_module()
+    if genai_module is None:
+        raise RuntimeError("Neither google-genai nor google-generativeai is installed.")
+
+    if hasattr(genai_module, "Client"):
+        return genai_module.Client(api_key=api_key)
+
+    genai_module.configure(api_key=api_key)
+    return genai_module
 
 
 def get_fallback_plan(difficulty: str) -> dict[str, Any]:
@@ -167,8 +194,21 @@ Also include "notes": string at the top level with general advice.
 """
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
+        genai_module = _load_genai_module()
+        if google_genai is not None:
+            client = get_gemini_client(API_KEY)
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+            )
+        elif legacy_genai is not None:
+            legacy_genai.configure(api_key=API_KEY)
+            model = legacy_genai.GenerativeModel("gemini-1.5-flash")
+            response = model.generate_content(prompt)
+        else:
+            logging.warning("No Gemini SDK installed; using fallback plan.")
+            return get_fallback_plan(difficulty)
+
         raw = getattr(response, "text", "")
         if not raw:
             raw = getattr(response, "output_text", "")
@@ -177,6 +217,6 @@ Also include "notes": string at the top level with general advice.
         parsed = json.loads(raw)
         parsed["generated_by"] = "llm"
         return parsed
-    except Exception as exc:
+    except Exception:
         logging.exception("Gemini weekly plan generation failed, using fallback plan.")
         return get_fallback_plan(difficulty)

@@ -86,9 +86,9 @@ export default function Exercise() {
           <canvas className="pointer-events-none absolute inset-0" width="640" height="480" />
         </div>
         <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <label className="block w-full text-sm text-slate-700 sm:w-auto">
+            <label className="block w-full text-sm text-slate-700 sm:w-auto">
             Exercise
-            <select value={exercise} onChange={(e) => setExercise(e.target.value)} className="mt-2 block w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none sm:w-64">
+            <select value={exercise} onChange={(e) => setExercise(e.target.value)} disabled={isRunning} aria-disabled={isRunning} className="mt-2 block w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none sm:w-64">
               {exercises.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>

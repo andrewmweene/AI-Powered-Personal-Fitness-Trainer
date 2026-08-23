@@ -60,7 +60,8 @@ def get_or_create_plan(db: Session = Depends(get_db), current_user=Depends(get_c
         "week_start_date": week_start.isoformat(),
         **metrics,
     }
-    plan_data = recommendation_engine.generate_plan(user_profile=user_profile, difficulty=None)
+    # recommendation_engine.generate_plan expects (user_profile, user_metrics)
+    plan_data = recommendation_engine.generate_plan(user_profile=user_profile, user_metrics=metrics)
 
     workout_plan = WorkoutPlan(
         user_id=current_user.id,

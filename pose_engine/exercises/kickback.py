@@ -12,6 +12,10 @@ class Kickback(BaseExercise):
         """Return the landmarks required to evaluate a kickback."""
         return [11, 13, 15, 23, 25, 27]
 
+    def get_angle_landmarks(self) -> list[int]:
+        """Use shoulder-elbow-wrist for the kickback elbow angle."""
+        return [11, 13, 15]
+
     def get_angle_thresholds(self) -> dict[str, float]:
         """Return thresholds for kickback motion phases."""
         return {

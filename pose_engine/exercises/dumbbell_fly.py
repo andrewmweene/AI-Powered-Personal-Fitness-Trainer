@@ -12,6 +12,10 @@ class DumbbellFly(BaseExercise):
         """Return the landmarks required to evaluate dumbbell fly."""
         return [11, 13, 15, 12, 14, 16]
 
+    def get_angle_landmarks(self) -> list[int]:
+        """Use shoulder-elbow-wrist for the fly angle."""
+        return [11, 13, 15]
+
     def get_angle_thresholds(self) -> dict[str, float]:
         """Return thresholds for dumbbell fly transitions."""
         return {
