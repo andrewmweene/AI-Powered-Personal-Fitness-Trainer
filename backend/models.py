@@ -30,6 +30,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     sessions = relationship("ExerciseSession", back_populates="user", cascade="all, delete-orphan")
+    body_measurements = relationship("BodyMeasurement", back_populates="user", cascade="all, delete-orphan")
     workout_plans = relationship("WorkoutPlan", back_populates="user", cascade="all, delete-orphan")
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     onboarding_complete = Column(Boolean, default=False, nullable=False)
@@ -59,6 +60,21 @@ class UserProfile(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="profile")
+
+
+class BodyMeasurement(Base):
+    """Stores dated body measurements used for progress reporting."""
+
+    __tablename__ = "body_measurements"
+
+    id = Column(String(36), primary_key=True, default=_uuid_str)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    height_cm = Column(Float, nullable=False)
+    weight_kg = Column(Float, nullable=False)
+    bmi = Column(Float, nullable=False)
+    measured_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = relationship("User", back_populates="body_measurements")
 
 
 class ExerciseSession(Base):

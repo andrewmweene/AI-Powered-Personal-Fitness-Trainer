@@ -148,7 +148,10 @@ export default function Onboarding() {
 
   return (
     <div className="mx-auto max-w-4xl rounded-3xl bg-white p-8 shadow-lg sm:p-10">
-      <StepProgress currentStep={currentStep - 1} totalSteps={4} stepName={['Profile', 'Goal', 'Equipment', 'Availability'][currentStep - 2]} />
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        Set up your profile so the app can generate a weekly plan that matches your goals.
+      </div>
+      <StepProgress currentStep={currentStep - 2} totalSteps={4} stepName={['Profile', 'Goal', 'Equipment', 'Availability'][Math.max(0, currentStep - 2)]} />
       {error ? <AlertBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
       <form onSubmit={handleSubmit(currentStep === 5 ? onSubmit : onNext)} className="space-y-8">
         {currentStep === 2 && (

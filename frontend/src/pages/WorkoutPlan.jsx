@@ -69,6 +69,18 @@ export default function WorkoutPlan() {
     return <div className="rounded-3xl bg-white p-8 shadow-sm"><p className="text-center text-danger">{error}</p></div>;
   }
 
+  if (!plan?.days?.length) {
+    return (
+      <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+        <h2 className="text-2xl font-semibold text-slate-900">No plan available yet</h2>
+        <p className="mt-3 text-slate-600">Generate your weekly workout plan after onboarding or refresh once your profile is complete.</p>
+        <div className="mt-6 flex justify-center">
+          <Button variant="primary" onClick={handleRefresh} loading={refreshing}>Generate plan</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

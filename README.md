@@ -2,6 +2,33 @@
 
 Lightweight FastAPI + React project that provides an AI-powered personal fitness trainer API and frontend.
 
+## Architecture
+
+The application follows a full-stack flow:
+
+```text
+React + Vite frontend
+	|
+	v
+FastAPI backend and JWT authentication
+	|
+	v
+Postgres in deployment or SQLite for local development
+```
+
+The backend connects the user interface to the MediaPipe-based pose-estimation
+engine for exercise analysis and the Gemini-based recommendation planner for
+adaptive workout plans. Analytics and body measurements are persisted through
+the same API and database layer.
+
+## Documentation
+
+- [Backend API](docs/BACKEND.md)
+- [Frontend](docs/FRONTEND.md)
+- [Pose engine](docs/POSE_ENGINE.md)
+- [Recommendation engine](docs/RECOMMENDATION.md)
+- [Analytics dashboard](docs/ANALYTICS_DASHBOARD.md)
+
 **Prerequisites**
 - **Python**: 3.11+
 - **Node.js & npm**: Node 18+ recommended

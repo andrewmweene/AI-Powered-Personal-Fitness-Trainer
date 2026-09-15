@@ -8,11 +8,14 @@ creates the SQLAlchemy engine, a `SessionLocal` factory, and exposes a
 from __future__ import annotations
 
 from typing import Generator
+import logging
 import os
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables from a .env file in the project root if present
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -33,7 +36,11 @@ def _build_engine(url: str):
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         return engine
-    except Exception:
+    except Exception as error:
+        logger.warning(
+            "Could not connect to the configured database; falling back to local SQLite: %s",
+            error,
+        )
         return create_engine("sqlite:///./fitness_trainer.db")
 
 

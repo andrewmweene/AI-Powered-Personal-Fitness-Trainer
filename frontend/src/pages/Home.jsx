@@ -9,11 +9,17 @@ import useAuth from '../hooks/useAuth.js';
 import AlertBanner from '../components/ui/AlertBanner.jsx';
 import Button from '../components/ui/Button.jsx';
 
+const DEMO_USER = {
+  username: 'testuser',
+  email: 'test@example.com',
+  password: 'FitTrainer123!',
+};
+
 export default function Home() {
   const navigate = useNavigate();
   const { login, token } = useAuth();
   const [tab, setTab] = useState('login');
-  const [form, setForm] = useState({ username: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ username: 'testuser', email: 'test@example.com', password: 'FitTrainer123!', confirmPassword: 'FitTrainer123!' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -83,6 +89,30 @@ export default function Home() {
     }
   };
 
+  const handleDemoLogin = async () => {
+    setForm({ ...DEMO_USER, confirmPassword: DEMO_USER.password });
+    setError('');
+    setSuccess('');
+    setTab('login');
+    setLoading(true);
+    try {
+      const token = await loginApi(DEMO_USER.username, DEMO_USER.password);
+      localStorage.setItem('token', token);
+      const userData = await getMe();
+      login(token, userData);
+      const statusData = await getStatus();
+      if (statusData.onboarding_complete) {
+        navigate('/dashboard');
+      } else {
+        navigate('/onboarding');
+      }
+    } catch (apiError) {
+      setError(apiError.response?.data?.detail || 'Demo login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-2xl rounded-3xl bg-white p-8 shadow-lg sm:p-10">
       <div className="mb-6 flex gap-4 rounded-full bg-slate-100 p-2">
@@ -105,6 +135,9 @@ export default function Home() {
       {success ? <AlertBanner type="success" message={success} onDismiss={() => setSuccess('')} /> : null}
       {tab === 'login' ? (
         <form onSubmit={handleLogin} className="space-y-5">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            Demo account ready: <strong>testuser</strong> / <strong>FitTrainer123!</strong>
+          </div>
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-slate-700">Username</label>
             <input id="username" value={form.username} onChange={handleChange('username')} className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none" />
@@ -113,7 +146,10 @@ export default function Home() {
             <label htmlFor="password" className="block text-sm font-medium text-slate-700">Password</label>
             <input id="password" type="password" value={form.password} onChange={handleChange('password')} className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none" />
           </div>
-          <Button type="submit" loading={loading} disabled={loading}>Login</Button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button type="submit" loading={loading} disabled={loading} className="flex-1">Login</Button>
+            <Button type="button" variant="secondary" onClick={handleDemoLogin} disabled={loading} className="flex-1">Use demo account</Button>
+          </div>
         </form>
       ) : (
         <form onSubmit={handleRegister} className="space-y-5">
