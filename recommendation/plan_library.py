@@ -640,3 +640,36 @@ PLAN_LIBRARY: dict[str, dict[str, Any]] = {
         sunday=_rest_day(),
     ),
 }
+
+# Keep the public library key format stable for callers created against the
+# onboarding specification while accepting the earlier internal spelling.
+for _key in list(PLAN_LIBRARY):
+    if "__equipment__" not in _key:
+        continue
+    _canonical_key = _key.replace("__equipment__", "__with_equipment__")
+    PLAN_LIBRARY[_canonical_key] = PLAN_LIBRARY.pop(_key)
+    PLAN_LIBRARY[_canonical_key]["match_key"] = _canonical_key
+
+
+def get_fallback_plan(fitness_level: str) -> dict[str, Any]:
+    """Return a general-fitness plan for a fitness level, defaulting to beginner.
+
+    Args:
+        fitness_level: Requested fitness tier.
+
+    Returns:
+        A complete static weekly plan.
+    """
+    fallbacks = {
+        "beginner": "beginner__general_fitness__no_equipment__3d__30min",
+        "intermediate": "intermediate__general_fitness__no_equipment__4d__45min",
+        "advanced": "advanced__general_fitness__with_equipment__5d__60min",
+    }
+    from copy import deepcopy
+
+    return deepcopy(PLAN_LIBRARY[fallbacks.get(fitness_level, fallbacks["beginner"])])
+
+
+def list_plan_keys() -> list[str]:
+    """Return all available static plan keys."""
+    return list(PLAN_LIBRARY)

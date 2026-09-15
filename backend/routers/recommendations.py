@@ -1,73 +1,77 @@
-"""Workout plan endpoints backed by recommendation logic."""
+"""Authenticated endpoints for weekly recommendation plans."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_current_user, get_db
-from recommendation import engine as recommendation_engine
-from ..schemas import WorkoutPlanResponse
-from ..models import WorkoutPlan, ExerciseSession
 from analytics.metrics import build_user_metrics_dict
+from recommendation.engine import MIN_SESSIONS_FOR_AI, generate_plan
+from recommendation.plan_library import get_fallback_plan
+from ..database import get_db
+from ..dependencies import get_current_user
+from ..models import ExerciseSession, WorkoutPlan
 
 router = APIRouter()
 
 
 def _this_monday() -> date:
+    """Return the Monday starting the current week."""
     today = date.today()
     return today - timedelta(days=today.weekday())
 
 
-@router.get("/plan", response_model=WorkoutPlanResponse)
-def get_or_create_plan(db: Session = Depends(get_db), current_user=Depends(get_current_user)) -> WorkoutPlan:
-    """Return cached plan for this week or generate a new one."""
-    week_start = _this_monday()
-    existing = (
-        db.query(WorkoutPlan)
-        .filter(WorkoutPlan.user_id == current_user.id)
-        .filter(WorkoutPlan.week_start_date == week_start)
-        .first()
-    )
-    if existing:
-        return existing
+def _session_dict(session: ExerciseSession) -> dict:
+    """Serialize an exercise session for pure analytics functions."""
+    return {
+        "exercise_type": session.exercise_type,
+        "total_reps": session.total_reps,
+        "correct_reps": session.correct_reps,
+        "incorrect_reps": session.incorrect_reps,
+        "posture_accuracy": session.posture_accuracy,
+        "duration_seconds": session.duration_seconds,
+        "created_at": session.created_at.isoformat() if session.created_at else None,
+    }
 
-    # build metrics from recent sessions
-    sessions = (
+
+def _build_plan_for_user(user, db: Session) -> dict:
+    """Build a plan from onboarding data and recent session performance."""
+    session_count = db.query(ExerciseSession).filter(ExerciseSession.user_id == user.id).count()
+    profile = user.profile
+    if profile is None:
+        plan = get_fallback_plan("beginner")
+        plan.update({"phase": 1, "sessions_until_ai": MIN_SESSIONS_FOR_AI})
+        return plan
+
+    recent = (
         db.query(ExerciseSession)
-        .filter(ExerciseSession.user_id == current_user.id)
+        .filter(ExerciseSession.user_id == user.id)
         .order_by(ExerciseSession.created_at.desc())
-        .limit(7)
+        .limit(14)
         .all()
     )
-    sessions_serialized = [
-        {
-            "exercise_type": s.exercise_type,
-            "total_reps": s.total_reps,
-            "correct_reps": s.correct_reps,
-            "posture_accuracy": s.posture_accuracy,
-            "created_at": s.created_at.isoformat(),
-        }
-        for s in sessions
-    ]
-    metrics = build_user_metrics_dict(sessions_serialized)
+    sessions = [_session_dict(session) for session in recent]
     user_profile = {
-        "user_id": current_user.id,
-        "fitness_level": current_user.fitness_level,
-        "goal": current_user.goal,
-        "week_start_date": week_start.isoformat(),
-        **metrics,
+        "username": user.username,
+        "age": profile.age,
+        "fitness_level": profile.fitness_level,
+        "goal": profile.goal,
+        "has_equipment": profile.has_equipment,
+        "days_per_week": profile.days_per_week,
+        "workout_duration_minutes": profile.workout_duration_minutes,
     }
-    # recommendation_engine.generate_plan expects (user_profile, user_metrics)
-    plan_data = recommendation_engine.generate_plan(user_profile=user_profile, user_metrics=metrics)
+    return generate_plan(user_profile, build_user_metrics_dict(sessions), session_count)
 
+
+def _save_plan(plan: dict, user, db: Session) -> WorkoutPlan:
+    """Persist a plan for the current week and return its ORM object."""
     workout_plan = WorkoutPlan(
-        user_id=current_user.id,
-        plan_data=plan_data,
-        generated_at=plan_data.get("generated_at"),
-        week_start_date=week_start,
+        user_id=user.id,
+        plan_data=plan,
+        generated_at=datetime.utcnow(),
+        week_start_date=_this_monday(),
     )
     db.add(workout_plan)
     db.commit()
@@ -75,12 +79,38 @@ def get_or_create_plan(db: Session = Depends(get_db), current_user=Depends(get_c
     return workout_plan
 
 
-@router.post("/plan/refresh", response_model=WorkoutPlanResponse)
-def refresh_plan(db: Session = Depends(get_db), current_user=Depends(get_current_user)) -> WorkoutPlan:
-    """Force-generate a new plan for the current week and save it."""
+@router.get("/plan")
+def get_or_create_plan(db: Session = Depends(get_db), current_user=Depends(get_current_user)) -> dict:
+    """Return this week's cached plan or generate and cache one."""
     week_start = _this_monday()
-    # delete any existing plan for this week
-    db.query(WorkoutPlan).filter(WorkoutPlan.user_id == current_user.id).filter(WorkoutPlan.week_start_date == week_start).delete()
+    existing = db.query(WorkoutPlan).filter(
+        WorkoutPlan.user_id == current_user.id,
+        WorkoutPlan.week_start_date == week_start,
+    ).first()
+    if existing:
+        return existing.plan_data
+    return _save_plan(_build_plan_for_user(current_user, db), current_user, db).plan_data
+
+
+@router.post("/plan/refresh")
+def refresh_plan(db: Session = Depends(get_db), current_user=Depends(get_current_user)) -> dict:
+    """Delete and regenerate this week's cached plan."""
+    db.query(WorkoutPlan).filter(
+        WorkoutPlan.user_id == current_user.id,
+        WorkoutPlan.week_start_date == _this_monday(),
+    ).delete(synchronize_session=False)
     db.commit()
-    # Delegate to GET logic to create and return new one
-    return get_or_create_plan(db=db, current_user=current_user)
+    return _save_plan(_build_plan_for_user(current_user, db), current_user, db).plan_data
+
+
+@router.get("/status")
+def get_recommendation_status(db: Session = Depends(get_db), current_user=Depends(get_current_user)) -> dict[str, int | bool]:
+    """Return the user's current recommendation phase and AI progress."""
+    session_count = db.query(ExerciseSession).filter(ExerciseSession.user_id == current_user.id).count()
+    return {
+        "session_count": session_count,
+        "min_for_ai": MIN_SESSIONS_FOR_AI,
+        "phase": 2 if session_count >= MIN_SESSIONS_FOR_AI else 1,
+        "sessions_until_ai": max(0, MIN_SESSIONS_FOR_AI - session_count),
+        "ai_active": session_count >= MIN_SESSIONS_FOR_AI,
+    }

@@ -15,6 +15,17 @@ export default function usePoseSession({ exercise, sessionId, isRunning, canvasR
   const [accuracy, setAccuracy] = useState(0);
   const [isAnalysing, setIsAnalysing] = useState(false);
 
+  const reset = () => {
+    setAngle(null);
+    setState('Rest');
+    setFeedback('');
+    setRepCount(0);
+    setCorrectReps(0);
+    setIncorrectReps(0);
+    setAccuracy(0);
+    setIsAnalysing(false);
+  };
+
   useEffect(() => {
     if (!isRunning || !canvasRef?.current) {
       return undefined;
@@ -65,5 +76,5 @@ export default function usePoseSession({ exercise, sessionId, isRunning, canvasR
     };
   }, [canvasRef, exercise, isRunning, sessionId, videoRef]);
 
-  return { angle, state, feedback, repCount, correctReps, incorrectReps, accuracy, isAnalysing };
+  return { angle, state, feedback, repCount, correctReps, incorrectReps, accuracy, isAnalysing, reset };
 }

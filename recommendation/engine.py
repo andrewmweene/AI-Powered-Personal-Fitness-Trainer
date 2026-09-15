@@ -1,30 +1,43 @@
-"""Orchestrator for recommendation workflows and workout plan generation."""
+"""Two-phase recommendation orchestrator."""
 
 from __future__ import annotations
 
-from .llm_planner import generate_weekly_plan, get_fallback_plan
-from .plan_matcher import match_plan
-from .rule_based import predict_difficulty
-from .schemas import WeeklyPlan
+import logging
+from typing import Any
+
+from . import llm_planner, plan_matcher
+
+logger = logging.getLogger(__name__)
+MIN_SESSIONS_FOR_AI = 5
 
 
-def generate_plan(user_profile: dict[str, object], user_metrics: dict[str, object]) -> dict[str, object]:
-    """Generate a workout plan using static onboarding matching or LLM fallback."""
-    if not user_profile.get("onboarding_complete"):
-        plan_input = {
-            "fitness_level": user_profile.get("fitness_level"),
-            "goal": user_profile.get("goal"),
-            "has_equipment": user_profile.get("has_equipment", False),
-            "days_per_week": user_profile.get("days_per_week"),
-            "workout_duration_minutes": user_profile.get("workout_duration_minutes"),
-        }
-        if all(value is not None for value in plan_input.values()):
-            return match_plan(plan_input)
+def generate_plan(
+    user_profile: dict[str, Any],
+    user_metrics: dict[str, Any],
+    session_count: int = 0,
+) -> dict[str, Any]:
+    """Choose a static onboarding plan or a performance-based AI plan.
 
-    difficulty_level = predict_difficulty(user_metrics)
-    plan = generate_weekly_plan(user_profile, difficulty_level)
-    try:
-        validated_plan = WeeklyPlan.model_validate(plan)
-        return validated_plan.model_dump()
-    except Exception:
-        return get_fallback_plan(difficulty_level)
+    Args:
+        user_profile: Onboarding profile including fitness and scheduling fields.
+        user_metrics: Aggregated performance metrics for recent sessions.
+        session_count: Total completed sessions; AI starts at five.
+
+    Returns:
+        A complete weekly plan with phase metadata.
+    """
+    fitness_level = str(user_profile.get("fitness_level", "beginner"))
+    if session_count < MIN_SESSIONS_FOR_AI:
+        logger.info("Phase 1: %s sessions, AI threshold is %s", session_count, MIN_SESSIONS_FOR_AI)
+        plan = plan_matcher.match_plan(user_profile)
+        plan["generated_by"] = "static_library"
+        plan["phase"] = 1
+        plan["sessions_until_ai"] = max(0, MIN_SESSIONS_FOR_AI - session_count)
+        return plan
+
+    logger.info("Phase 2: %s sessions, generating Gemini plan", session_count)
+    plan = llm_planner.generate_weekly_plan(user_profile, user_metrics)
+    plan["phase"] = 2
+    plan["sessions_until_ai"] = 0
+    plan.setdefault("difficulty", fitness_level)
+    return plan

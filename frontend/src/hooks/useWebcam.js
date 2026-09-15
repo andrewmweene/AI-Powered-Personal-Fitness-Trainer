@@ -3,13 +3,23 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
-export default function useWebcam({ width = 640, height = 480 } = {}) {
+export default function useWebcam({ width = 640, height = 480, enabled = true } = {}) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsReady(false);
+      setError(null);
+      if (canvasRef.current) {
+        canvasRef.current.width = width;
+        canvasRef.current.height = height;
+      }
+      return undefined;
+    }
+
     canvasRef.current = document.createElement('canvas');
     canvasRef.current.width = width;
     canvasRef.current.height = height;
@@ -26,6 +36,9 @@ export default function useWebcam({ width = 640, height = 480 } = {}) {
           videoRef.current.play().catch(() => {
             /* ignore autoplay errors */
           });
+          if (videoRef.current.readyState >= 2) {
+            setIsReady(true);
+          }
         }
       } catch (captureError) {
         setError('Unable to access the camera. Please allow webcam access.');
@@ -39,24 +52,31 @@ export default function useWebcam({ width = 640, height = 480 } = {}) {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [height, width]);
+  }, [enabled, height, width]);
 
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
     function handleLoaded() {
       setIsReady(true);
     }
 
     const videoElement = videoRef.current;
-    if (videoElement) {
-      videoElement.addEventListener('loadedmetadata', handleLoaded);
+    if (!videoElement) {
+      return undefined;
+    }
+
+    videoElement.addEventListener('loadedmetadata', handleLoaded);
+    if (videoElement.readyState >= 2) {
+      setIsReady(true);
     }
 
     return () => {
-      if (videoElement) {
-        videoElement.removeEventListener('loadedmetadata', handleLoaded);
-      }
+      videoElement.removeEventListener('loadedmetadata', handleLoaded);
     };
-  }, []);
+  }, [enabled]);
 
   return { videoRef, canvasRef, isReady, error };
 }

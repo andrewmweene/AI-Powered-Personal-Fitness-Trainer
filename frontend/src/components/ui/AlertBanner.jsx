@@ -16,10 +16,12 @@ export default function AlertBanner({ type, message, onDismiss }) {
 
   const Icon = type === 'success' ? CheckCircle : type === 'error' ? XCircle : Info;
 
+  const displayMessage = typeof message === 'string' ? message : String(message ?? '');
+
   return (
     <div className={`mb-4 flex items-start gap-3 rounded-xl border px-4 py-3 ${styles[type]}`}>
       <Icon className="mt-1 h-5 w-5 flex-shrink-0" />
-      <div className="flex-1 text-sm leading-6">{message}</div>
+      <div className="flex-1 text-sm leading-6">{displayMessage}</div>
       <button type="button" aria-label="Dismiss alert" onClick={onDismiss} className="text-slate-600 hover:text-slate-900">
         ✕
       </button>

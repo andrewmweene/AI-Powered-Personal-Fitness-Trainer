@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from typing import List
 
 from fastapi import APIRouter, Depends
@@ -11,8 +10,16 @@ from sqlalchemy.orm import Session
 from ..dependencies import get_current_user, get_db
 from ..models import ExerciseSession
 from ..schemas import AnalyticsSummary
-from analytics.progress import calculate_streak, calculate_weekly_breakdown, calculate_by_exercise, calculate_accuracy_trend
-from analytics.metrics import calculate_total_reps, calculate_average_accuracy
+from analytics.metrics import (
+    calculate_accuracy_trend,
+    calculate_average_accuracy,
+    calculate_by_exercise,
+    calculate_sessions_per_week,
+    calculate_streak,
+    calculate_total_reps,
+    calculate_total_sessions,
+    calculate_weekly_breakdown,
+)
 
 router = APIRouter()
 
@@ -38,14 +45,11 @@ def get_summary(db: Session = Depends(get_db), current_user=Depends(get_current_
     """Return aggregated analytics for the current user's exercise history."""
     sessions = db.query(ExerciseSession).filter(ExerciseSession.user_id == current_user.id).all()
     serialized = _serialize_sessions(sessions)
-    total_sessions = len(serialized)
+    total_sessions = calculate_total_sessions(serialized)
     total_reps = calculate_total_reps(serialized)
     avg_accuracy = calculate_average_accuracy(serialized)
     current_streak, best_streak = calculate_streak(serialized)
-    # sessions this week: created_at >= this Monday
-    today = datetime.utcnow().date()
-    monday = today - timedelta(days=today.weekday())
-    sessions_this_week = sum(1 for s in serialized if s.get("created_at") and datetime.fromisoformat(s["created_at"]).date() >= monday)
+    sessions_this_week = int(calculate_sessions_per_week(serialized))
     return AnalyticsSummary(
         total_sessions=total_sessions,
         total_reps=total_reps,

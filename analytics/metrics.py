@@ -1,80 +1,117 @@
-"""Posture accuracy, rep count, and streak calculation utilities."""
+"""Pure analytics functions over serialized exercise session dictionaries."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Sequence
+import statistics
+from datetime import date, datetime, timedelta
+from typing import Any
 
 
-def calculate_posture_accuracy(scores: Sequence[float]) -> float:
-    """Calculate average posture accuracy as a percentage."""
-    if not scores:
-        return 0.0
-    return float(sum(scores) / len(scores) * 100)
+def _datetime(value: Any) -> datetime | None:
+    """Parse a datetime value, accepting timezone-aware ISO strings."""
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            return None
+    return None
 
 
-def count_reps(states: Sequence[str]) -> int:
-    """Count completed reps from a sequence of exercise states."""
-    return sum(1 for state in states if state == "COMPLETE")
+def calculate_posture_accuracy(scores: list[float]) -> float:
+    """Return a percentage from normalized posture scores."""
+    return float(sum(scores) / len(scores) * 100) if scores else 0.0
 
 
-def calculate_streak(correct_reps: int, total_reps: int) -> float:
-    """Calculate a correctness streak percentage for exercise form."""
-    if total_reps == 0:
-        return 0.0
-    return float(correct_reps / total_reps * 100)
+def count_reps(states: list[str]) -> int:
+    """Count completed repetitions in a state sequence."""
+    return sum(state == "COMPLETE" for state in states)
 
 
 def calculate_total_sessions(sessions: list[dict]) -> int:
-    """Return the total number of exercise sessions."""
+    """Return the number of sessions."""
     return len(sessions)
 
 
 def calculate_total_reps(sessions: list[dict]) -> int:
-    """Return the sum of total reps across all sessions."""
-    return sum(int(session.get("total_reps", 0)) for session in sessions)
+    """Return total completed and attempted repetitions recorded."""
+    return sum(int(session.get("total_reps", 0) or 0) for session in sessions)
 
 
 def calculate_average_accuracy(sessions: list[dict]) -> float:
-    """Return the mean posture accuracy for a session list."""
-    if not sessions:
-        return 0.0
-    accuracies = [float(session.get("posture_accuracy", 0.0)) for session in sessions]
-    return float(sum(accuracies) / len(accuracies))
+    """Return the mean non-null posture accuracy rounded to one decimal."""
+    values = [float(s["posture_accuracy"]) for s in sessions if s.get("posture_accuracy") is not None]
+    return round(statistics.mean(values), 1) if values else 0.0
 
 
 def calculate_sessions_per_week(sessions: list[dict]) -> float:
-    """Count sessions in the last 7 days and return the count as a float."""
-    if not sessions:
-        return 0.0
+    """Count sessions created during the preceding seven days."""
     cutoff = datetime.utcnow() - timedelta(days=7)
-    count = 0
-    for session in sessions:
-        created_at = session.get("created_at")
-        if isinstance(created_at, str):
-            try:
-                timestamp = datetime.fromisoformat(created_at)
-            except ValueError:
-                continue
-        else:
-            continue
-        if timestamp >= cutoff:
-            count += 1
-    return float(count)
+    return float(sum(1 for session in sessions if (created := _datetime(session.get("created_at"))) and created >= cutoff))
 
 
 def calculate_average_reps_per_session(sessions: list[dict]) -> float:
-    """Return average reps per session for the provided sessions."""
-    if not sessions:
-        return 0.0
-    total_reps = calculate_total_reps(sessions)
-    return float(total_reps) / len(sessions)
+    """Return average total repetitions per session."""
+    return round(calculate_total_reps(sessions) / len(sessions), 1) if sessions else 0.0
 
 
-def build_user_metrics_dict(sessions: list[dict]) -> dict[str, float]:
-    """Build the metrics dict used by the recommendation rule-based model."""
+def build_user_metrics_dict(sessions: list[dict]) -> dict[str, float | int]:
+    """Build metrics consumed by the recommendation engine."""
     return {
         "avg_posture_accuracy": calculate_average_accuracy(sessions),
         "sessions_per_week": calculate_sessions_per_week(sessions),
         "avg_reps_per_session": calculate_average_reps_per_session(sessions),
+        "total_sessions": calculate_total_sessions(sessions),
+        "total_reps": calculate_total_reps(sessions),
     }
+
+
+def calculate_streak(sessions: list[dict] | int, total_reps: int | None = None) -> tuple[int, int] | float:
+    """Return current and best consecutive session-day streaks."""
+    if isinstance(sessions, int):
+        return float(sessions / total_reps * 100) if total_reps else 0.0
+    dates = {created.date() for session in sessions if (created := _datetime(session.get("created_at")))}
+    if not dates:
+        return 0, 0
+    ordered = sorted(dates)
+    best = current = 1
+    run = 1
+    for previous, current_date in zip(ordered, ordered[1:]):
+        run = run + 1 if current_date == previous + timedelta(days=1) else 1
+        best = max(best, run)
+    current = 0
+    cursor = date.today()
+    if cursor not in dates:
+        cursor -= timedelta(days=1)
+    while cursor in dates:
+        current += 1
+        cursor -= timedelta(days=1)
+    return current, best
+
+
+def calculate_weekly_breakdown(sessions: list[dict]) -> list[dict]:
+    """Return session count and average accuracy for each of the last seven days."""
+    result = []
+    for offset in range(6, -1, -1):
+        target = date.today() - timedelta(days=offset)
+        day_sessions = [s for s in sessions if (created := _datetime(s.get("created_at"))) and created.date() == target]
+        result.append({"date": target.isoformat(), "session_count": len(day_sessions), "avg_accuracy": calculate_average_accuracy(day_sessions)})
+    return result
+
+
+def calculate_accuracy_trend(sessions: list[dict], n: int = 30) -> list[dict]:
+    """Return the last ``n`` session accuracies in chronological order."""
+    ordered = sorted((s for s in sessions if _datetime(s.get("created_at"))), key=lambda s: _datetime(s.get("created_at")))
+    return [{"session_num": index, "accuracy": round(float(session.get("posture_accuracy") or 0), 1)} for index, session in enumerate(ordered[-n:], 1)]
+
+
+def calculate_by_exercise(sessions: list[dict]) -> list[dict]:
+    """Group sessions by exercise and return count plus average accuracy."""
+    groups: dict[str, list[dict]] = {}
+    for session in sessions:
+        groups.setdefault(str(session.get("exercise_type", "Unknown")), []).append(session)
+    return sorted(
+        [{"exercise": exercise, "count": len(group), "avg_accuracy": calculate_average_accuracy(group)} for exercise, group in groups.items()],
+        key=lambda item: item["count"], reverse=True,
+    )

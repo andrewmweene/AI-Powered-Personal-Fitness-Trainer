@@ -1,53 +1,69 @@
-"""Static plan matcher that chooses the best pre-built workout plan."""
+"""Match onboarding profiles to the closest static workout plan."""
 
 from __future__ import annotations
 
-from .plan_library import PLAN_LIBRARY
+import logging
+from copy import deepcopy
+
+from .plan_library import PLAN_LIBRARY, get_fallback_plan
+
+logger = logging.getLogger(__name__)
+MIN_DAYS_BRACKET = [3, 4, 5]
+MIN_DURATION_BRACKET = [30, 45, 60]
 
 
-def _equipment_key(has_equipment: bool) -> str:
-    return "equipment" if has_equipment else "no_equipment"
+def _closest(value: int, options: list[int]) -> int:
+    """Return the available option closest to a requested integer."""
+    return min(options, key=lambda option: abs(option - value))
 
 
-def _parse_key(key: str) -> tuple[str, str, str, int, int]:
-    parts = key.split("__")
-    if len(parts) != 5:
-        raise ValueError(f"Invalid plan key: {key}")
-    fitness_level, goal, equipment, days_part, duration_part = parts
-    days = int(days_part[:-1])
-    duration = int(duration_part[:-3])
-    return fitness_level, goal, equipment, days, duration
+def match_plan(profile: dict) -> dict:
+    """Match a profile to a complete static plan and never return ``None``.
 
+    Args:
+        profile: Fitness level, goal, equipment, days, and duration preferences.
 
-def _plan_score(key: str, target_equipment: str, target_days: int, target_duration: int) -> tuple[int, int, int]:
-    _, _, equipment, days, duration = _parse_key(key)
-    equipment_penalty = 0 if equipment == target_equipment else 100
-    return equipment_penalty, abs(days - target_days), abs(duration - target_duration)
-
-
-def match_plan(profile: dict[str, object]) -> dict[str, object]:
-    """Match a static workout plan to a user's onboarding profile."""
-    fitness_level = str(profile.get("fitness_level", "")).lower()
-    goal = str(profile.get("goal", "")).lower()
+    Returns:
+        A copied plan from ``PLAN_LIBRARY``.
+    """
+    fitness_level = str(profile.get("fitness_level", "beginner")).lower()
+    goal = str(profile.get("goal", "general_fitness")).lower()
     has_equipment = bool(profile.get("has_equipment", False))
-    target_days = int(profile.get("days_per_week", 3))
-    target_duration = int(profile.get("workout_duration_minutes", 30))
+    try:
+        days = int(profile.get("days_per_week", 3))
+    except (TypeError, ValueError):
+        days = 3
+    try:
+        duration = int(profile.get("workout_duration_minutes", 30))
+    except (TypeError, ValueError):
+        duration = 30
 
-    equipment_key = _equipment_key(has_equipment)
-    exact_key = f"{fitness_level}__{goal}__{equipment_key}__{target_days}d__{target_duration}min"
+    equipment = "with_equipment" if has_equipment else "no_equipment"
+    days_bracket = _closest(days, MIN_DAYS_BRACKET)
+    duration_bracket = _closest(duration, MIN_DURATION_BRACKET)
+
+    exact_key = f"{fitness_level}__{goal}__{equipment}__{days_bracket}d__{duration_bracket}min"
     if exact_key in PLAN_LIBRARY:
-        plan = PLAN_LIBRARY[exact_key].copy()
-        plan["generated_by"] = "static_library"
-        plan["match_key"] = exact_key
-        return plan
+        logger.info("Plan matched exactly: %s", exact_key)
+        return deepcopy(PLAN_LIBRARY[exact_key])
 
-    candidates = [key for key in PLAN_LIBRARY if key.startswith(f"{fitness_level}__{goal}__")]
-    if not candidates:
-        # Fallback to the full library if the exact fitness-level or goal is missing.
-        candidates = list(PLAN_LIBRARY.keys())
+    for equipment_fallback in ("no_equipment", "with_equipment"):
+        fallback_key = f"{fitness_level}__{goal}__{equipment_fallback}__{days_bracket}d__{duration_bracket}min"
+        if fallback_key in PLAN_LIBRARY:
+            logger.info("Plan matched with equipment fallback: %s", fallback_key)
+            return deepcopy(PLAN_LIBRARY[fallback_key])
 
-    best_key = min(candidates, key=lambda key: _plan_score(key, equipment_key, target_days, target_duration))
-    plan = PLAN_LIBRARY[best_key].copy()
-    plan["generated_by"] = "static_library"
-    plan["match_key"] = best_key
-    return plan
+    prefix = f"{fitness_level}__{goal}__"
+    for key, plan in PLAN_LIBRARY.items():
+        if key.startswith(prefix):
+            logger.info("Plan matched by level and goal: %s", key)
+            return deepcopy(plan)
+
+    prefix = f"{fitness_level}__general_fitness__"
+    for key, plan in PLAN_LIBRARY.items():
+        if key.startswith(prefix):
+            logger.info("Plan matched by general-fitness fallback: %s", key)
+            return deepcopy(plan)
+
+    logger.warning("No static plan matched profile %s; using beginner fallback", profile)
+    return get_fallback_plan("beginner")

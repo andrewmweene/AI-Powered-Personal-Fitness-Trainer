@@ -101,12 +101,29 @@ export default function Onboarding() {
   const onSubmit = async (values) => {
     setError('');
     setLoading(true);
-    const payload = { ...formData, ...values };
+    const submitted = { ...formData, ...values };
+    const payload = {
+      age: Number(submitted.age),
+      gender: submitted.gender || null,
+      height_cm: Number(submitted.height_cm),
+      weight_kg: Number(submitted.weight_kg),
+      fitness_level: String(submitted.fitness_level).toLowerCase(),
+      goal: submitted.goal,
+      has_equipment: submitted.equipment_type === 'equipment',
+      equipment_list: submitted.equipment_list || [],
+      days_per_week: Number(submitted.days_per_week),
+      workout_duration_minutes: Number(submitted.workout_duration_minutes),
+      preferred_time: submitted.preferred_time,
+    };
     try {
       await completeOnboarding(payload);
       navigate('/plan');
     } catch (apiError) {
-      setError(apiError.response?.data?.detail || 'Unable to submit onboarding details.');
+      const detail = apiError.response?.data?.detail;
+      const message = Array.isArray(detail)
+        ? detail.map((item) => item.msg || 'Invalid field').join(' ')
+        : detail;
+      setError(message || 'Unable to submit onboarding details.');
     } finally {
       setLoading(false);
     }

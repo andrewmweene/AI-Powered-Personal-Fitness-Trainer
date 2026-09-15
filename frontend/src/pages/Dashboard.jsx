@@ -86,12 +86,12 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {sessions.map((session, index) => (
-                  <tr key={`${session.session_id}-${index}`} className={index % 2 === 0 ? 'bg-slate-50' : ''}>
+                  <tr key={`${session.id}-${index}`} className={index % 2 === 0 ? 'bg-slate-50' : ''}>
                     <td className="px-4 py-3">{new Date(session.created_at || session.date || Date.now()).toLocaleDateString()}</td>
-                    <td className="px-4 py-3">{session.exercise}</td>
-                    <td className="px-4 py-3">{session.rep_count}</td>
+                    <td className="px-4 py-3">{session.exercise_type}</td>
+                    <td className="px-4 py-3">{session.total_reps}</td>
                     <td className="px-4 py-3">{session.correct_reps}</td>
-                    <td className="px-4 py-3">{session.accuracy ?? 0}%</td>
+                    <td className="px-4 py-3">{session.posture_accuracy ?? 0}%</td>
                     <td className="px-4 py-3">{session.duration_seconds ? `${Math.floor(session.duration_seconds / 60)}m ${session.duration_seconds % 60}s` : '-'}</td>
                   </tr>
                 ))}

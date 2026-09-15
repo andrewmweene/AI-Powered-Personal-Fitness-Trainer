@@ -9,6 +9,21 @@ import DayCard from '../components/workout/DayCard.jsx';
 
 const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+function normalizePlan(response) {
+  const planData = response?.plan_data || response || {};
+  const days = weekdays.map((name) => ({
+    name,
+    ...(planData[name.toLowerCase()] || { is_rest: true, exercises: [] }),
+  }));
+  return { ...planData, days, week_start_date: response?.week_start_date || planData.week_start_date };
+}
+
+function formatWeekStart(value) {
+  if (!value) return 'this week';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 'this week' : parsed.toLocaleDateString();
+}
+
 export default function WorkoutPlan() {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,7 +35,7 @@ export default function WorkoutPlan() {
       setError('');
       try {
         const data = await getPlan();
-        setPlan(data);
+        setPlan(normalizePlan(data));
       } catch (apiError) {
         setError(apiError.response?.data?.detail || 'Unable to load workout plan.');
       } finally {
@@ -36,7 +51,7 @@ export default function WorkoutPlan() {
     setError('');
     try {
       const refreshed = await refreshPlan();
-      setPlan(refreshed);
+      setPlan(normalizePlan(refreshed));
     } catch (apiError) {
       setError(apiError.response?.data?.detail || 'Unable to refresh plan.');
     } finally {
@@ -44,7 +59,7 @@ export default function WorkoutPlan() {
     }
   };
 
-  const todayIndex = useMemo(() => new Date().getDay() - 1, []);
+  const todayIndex = useMemo(() => (new Date().getDay() + 6) % 7, []);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -58,8 +73,8 @@ export default function WorkoutPlan() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Your workout plan — week of {new Date(plan?.week_start_date).toLocaleDateString()}</h1>
-          <p className="mt-2 text-sm text-slate-600">{plan?.generated_by ? 'Matched to your profile' : 'AI-generated plan'}</p>
+          <h1 className="text-3xl font-semibold text-slate-900">Your workout plan — week of {formatWeekStart(plan?.week_start_date)}</h1>
+          <p className="mt-2 text-sm text-slate-600">{plan?.generated_by === 'static_library' ? 'Matched to your onboarding profile' : 'AI-generated based on your performance'}</p>
         </div>
         <Button variant="primary" onClick={handleRefresh} loading={refreshing}>Refresh plan</Button>
       </div>

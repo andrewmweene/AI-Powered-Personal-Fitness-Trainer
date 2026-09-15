@@ -268,6 +268,23 @@ alembic upgrade head
 uvicorn backend.main:app --reload --port 8000
 ```
 
+## Create mock accounts
+
+Seed three complete local accounts with onboarding profiles, session history,
+feedback logs, and cached weekly plans:
+
+```bash
+python scripts/seed_mock_data.py
+```
+
+All accounts use the password `FitTrainer123!`:
+
+- `maya_beginner`
+- `leo_intermediate`
+- `aria_advanced`
+
+The command is safe to rerun. Add `--reset` to recreate only these mock users.
+
 ---
 
 ## Testing
@@ -275,5 +292,5 @@ uvicorn backend.main:app --reload --port 8000
 ```bash
 pytest tests/test_auth.py -v
 # Test the API manually via the auto-generated docs:
-# http://localhost:8000/docs
+# http://localhost:8000/docstre
 ```
