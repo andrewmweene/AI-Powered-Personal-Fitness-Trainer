@@ -38,8 +38,8 @@ _session_machines: dict[str, ExerciseStateMachine] = {}
 @router.post("/analyse-frame")
 async def analyse_frame(
     file: UploadFile,
-    exercise: str = Form(...),
-    session_id: str = Form(...),
+    exercise: str = Form(..., min_length=1, max_length=40),
+    session_id: str = Form(..., min_length=1, max_length=100),
     current_user=Depends(get_current_user),
 ):
     """Analyse a single video frame for the given exercise and session.

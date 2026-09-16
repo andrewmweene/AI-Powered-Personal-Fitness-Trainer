@@ -13,8 +13,6 @@ function getAccuracyStyle(avgAccuracy) {
  * @param {{ data: Array<{ exercise: string, count: number, avg_accuracy: number }> }} props
  */
 export default function ExerciseBreakdownChart({ data }) {
-  const maxCount = Math.max(...data.map((entry) => entry.count || 0), 1);
-
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm">
       <div className="mb-5 flex items-start justify-between gap-4">
@@ -22,10 +20,7 @@ export default function ExerciseBreakdownChart({ data }) {
           <h2 className="text-lg font-semibold text-slate-900">Exercise breakdown</h2>
           <p className="mt-1 text-sm text-slate-500">How often you train and how accurate your form is.</p>
         </div>
-        <div className="hidden text-right text-xs text-slate-400 sm:block">
-          <p>Sessions</p>
-          <p className="mt-3">Accuracy</p>
-        </div>
+        <span className="hidden text-xs text-slate-400 sm:block">Session count shown as a number</span>
       </div>
 
       {data.length === 0 ? (
@@ -46,20 +41,15 @@ export default function ExerciseBreakdownChart({ data }) {
                   <span className="text-sm text-slate-500 sm:hidden">{count} {count === 1 ? 'session' : 'sessions'}</span>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-100" aria-label={`${count} sessions`}>
-                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${(count / maxCount) * 100}%` }} />
-                  </div>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100" aria-label={`${accuracy}% posture accuracy`}>
                       <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${Math.min(accuracy, 100)}%` }} />
                     </div>
                     <span className={`w-10 text-right text-sm font-semibold ${style.text}`}>{accuracy}%</span>
-                  </div>
                 </div>
 
                 <div className="hidden text-right sm:block">
-                  <p className="font-semibold text-slate-900">{count}</p>
+                  <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-700">{count} {count === 1 ? 'session' : 'sessions'}</span>
                   <p className={`mt-2 text-xs font-medium ${style.text}`}>{style.label}</p>
                 </div>
               </div>

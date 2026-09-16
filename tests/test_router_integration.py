@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -18,7 +18,7 @@ os.environ["ENV"] = "test"
 from backend.auth import create_access_token, hash_password  # noqa: E402
 from backend.database import Base  # noqa: E402
 from backend.dependencies import get_db as dependency_get_db  # noqa: E402
-from backend.models import User, UserProfile  # noqa: E402
+from backend.models import RefreshToken, User, UserProfile  # noqa: E402
 from backend.database import get_db as database_get_db  # noqa: E402
 from backend.main import app  # noqa: E402
 
@@ -168,3 +168,78 @@ def test_pose_router_requires_auth(client_and_token) -> None:
         files={"file": ("frame.jpg", b"not-a-real-image", "image/jpeg")},
     )
     assert response.status_code == 401
+
+
+def test_auth_login_sets_cookie_and_short_access_token(client_and_token) -> None:
+    client, _ = client_and_token
+    response = client.post("/auth/login", json={"username": "missing", "password": "Password123!"})
+    assert response.status_code == 401
+
+
+def test_auth_refresh_rotates_cookie(client_and_token) -> None:
+    client, token = client_and_token
+    db = TestingSessionLocal()
+    user = db.query(User).order_by(User.created_at.desc()).first()
+    username = user.username
+    db.close()
+
+    login_response = client.post("/auth/login", json={"username": username, "password": "Password123!"})
+    assert login_response.status_code == 200
+    assert "refresh_token" in login_response.cookies
+    assert set(login_response.json()) == {"access_token", "token_type"}
+    old_cookie = login_response.cookies.get("refresh_token")
+
+    refresh_response = client.post("/auth/refresh")
+    assert refresh_response.status_code == 200
+    assert refresh_response.json()["access_token"]
+    assert refresh_response.cookies.get("refresh_token") != old_cookie
+
+    client.cookies.clear()
+    client.cookies.set("refresh_token", old_cookie, path="/auth")
+    revoked_response = client.post("/auth/refresh")
+    assert revoked_response.status_code == 401
+
+
+def test_auth_refresh_missing_cookie_returns_401(client_and_token) -> None:
+    client, _ = client_and_token
+    assert client.post("/auth/refresh").status_code == 401
+
+
+def test_auth_refresh_expired_cookie_returns_401(client_and_token) -> None:
+    client, _ = client_and_token
+    db = TestingSessionLocal()
+    user = db.query(User).order_by(User.created_at.desc()).first()
+    username = user.username
+    db.close()
+
+    assert client.post("/auth/login", json={"username": username, "password": "Password123!"}).status_code == 200
+    raw_cookie = client.cookies.get("refresh_token")
+    db = TestingSessionLocal()
+    record = db.query(RefreshToken).filter(RefreshToken.user_id == user.id).order_by(RefreshToken.created_at.desc()).first()
+    record.expires_at = datetime.utcnow() - timedelta(minutes=1)
+    db.commit()
+    db.close()
+
+    client.cookies.clear()
+    client.cookies.set("refresh_token", raw_cookie, path="/auth")
+    assert client.post("/auth/refresh").status_code == 401
+
+
+def test_auth_logout_revokes_and_clears_cookie(client_and_token) -> None:
+    client, _ = client_and_token
+    db = TestingSessionLocal()
+    user = db.query(User).order_by(User.created_at.desc()).first()
+    username = user.username
+    db.close()
+
+    assert client.post("/auth/login", json={"username": username, "password": "Password123!"}).status_code == 200
+    logout_response = client.post("/auth/logout")
+    assert logout_response.status_code == 204
+    assert "refresh_token" not in client.cookies
+    assert client.post("/auth/refresh").status_code == 401
+
+
+def test_auth_login_rate_limit_returns_429(client_and_token) -> None:
+    client, _ = client_and_token
+    responses = [client.post("/auth/login", json={"username": "missing", "password": "Password123!"}) for _ in range(6)]
+    assert any(response.status_code == 429 for response in responses)

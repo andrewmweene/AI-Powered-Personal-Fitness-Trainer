@@ -8,6 +8,7 @@ COPILOT_*_PROMPT.md
 
 # Generated/binary files that should not be tracked
 *.db
+*.sqlite3
 frontend/dist/
 frontend/node_modules/
 

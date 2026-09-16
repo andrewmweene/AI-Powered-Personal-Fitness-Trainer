@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 class BodyProfileCreate(BaseModel):
     age: int = Field(ge=13, le=100)
-    gender: Optional[str] = None
+    gender: Optional[str] = Field(default=None, max_length=20)
     height_cm: float = Field(ge=50, le=300)
     weight_kg: float = Field(ge=20, le=300)
     fitness_level: Literal["beginner", "intermediate", "advanced"]
@@ -30,18 +30,18 @@ class GoalCreate(BaseModel):
 
 class EquipmentCreate(BaseModel):
     has_equipment: bool
-    equipment_list: list[str] = []
+    equipment_list: list[str] = Field(default_factory=list, max_length=20)
 
 
 class AvailabilityCreate(BaseModel):
     days_per_week: int = Field(ge=1, le=7)
     workout_duration_minutes: Literal[15, 20, 30, 45, 60, 75, 90]
-    preferred_time: str
+    preferred_time: str = Field(max_length=50)
 
 
 class OnboardingComplete(BaseModel):
     age: int = Field(ge=13, le=100)
-    gender: Optional[str] = None
+    gender: Optional[str] = Field(default=None, max_length=20)
     height_cm: float = Field(ge=50, le=300)
     weight_kg: float = Field(ge=20, le=300)
     fitness_level: Literal["beginner", "intermediate", "advanced"]
@@ -55,10 +55,10 @@ class OnboardingComplete(BaseModel):
         "sports_specific",
     ]
     has_equipment: bool
-    equipment_list: list[str] = []
+    equipment_list: list[str] = Field(default_factory=list, max_length=20)
     days_per_week: int = Field(ge=1, le=7)
     workout_duration_minutes: Literal[15, 20, 30, 45, 60, 75, 90]
-    preferred_time: str
+    preferred_time: str = Field(max_length=50)
 
 
 class UserProfileResponse(BaseModel):

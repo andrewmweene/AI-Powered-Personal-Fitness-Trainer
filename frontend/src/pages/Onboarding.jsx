@@ -3,8 +3,8 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
-import { completeOnboarding, getStatus } from '../api/onboarding.js';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { completeOnboarding, getProfile, getStatus } from '../api/onboarding.js';
 import AlertBanner from '../components/ui/AlertBanner.jsx';
 import Button from '../components/ui/Button.jsx';
 import MetricCard from '../components/ui/MetricCard.jsx';
@@ -24,6 +24,8 @@ const equipmentItems = ['Dumbbells', 'Resistance bands', 'Pull-up bar', 'Kettleb
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isEditing = new URLSearchParams(location.search).get('edit') === '1';
   const [currentStep, setCurrentStep] = useState(2);
   const [error, setError] = useState('');
 
@@ -31,7 +33,7 @@ export default function Onboarding() {
     const redirectIfComplete = async () => {
       try {
         const statusData = await getStatus();
-        if (statusData.onboarding_complete) {
+        if (statusData.onboarding_complete && !isEditing) {
           navigate('/dashboard', { replace: true });
         }
       } catch (error) {
@@ -40,7 +42,7 @@ export default function Onboarding() {
     };
 
     redirectIfComplete();
-  }, [navigate]);
+  }, [isEditing, navigate]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     age: '',
@@ -57,7 +59,36 @@ export default function Onboarding() {
   });
 
   const form = useForm({ defaultValues: formData });
-  const { register, handleSubmit, watch, formState: { errors } } = form;
+  const { register, handleSubmit, watch, reset, formState: { errors } } = form;
+
+  useEffect(() => {
+    if (!isEditing) return;
+
+    async function loadProfile() {
+      try {
+        const profile = await getProfile();
+        const existing = {
+          age: profile.age,
+          gender: profile.gender || '',
+          height_cm: profile.height_cm,
+          weight_kg: profile.weight_kg,
+          fitness_level: profile.fitness_level.charAt(0).toUpperCase() + profile.fitness_level.slice(1),
+          goal: profile.goal,
+          equipment_type: profile.has_equipment ? 'equipment' : 'bodyweight',
+          equipment_list: profile.equipment_list || [],
+          days_per_week: profile.days_per_week,
+          workout_duration_minutes: profile.workout_duration_minutes,
+          preferred_time: profile.preferred_time,
+        };
+        setFormData(existing);
+        reset(existing);
+      } catch (profileError) {
+        setError('Unable to load your profile for editing.');
+      }
+    }
+
+    loadProfile();
+  }, [isEditing, reset]);
   const watchedHeight = Number(watch('height_cm') || formData.height_cm);
   const watchedWeight = Number(watch('weight_kg') || formData.weight_kg);
   const watchedGoal = watch('goal') || formData.goal;
@@ -66,12 +97,14 @@ export default function Onboarding() {
   const watchedDuration = watch('workout_duration_minutes') || formData.workout_duration_minutes;
   const watchedPreferredTime = watch('preferred_time') || formData.preferred_time;
 
+  const hasValidBodyMeasurements = watchedHeight >= 50 && watchedHeight <= 300 && watchedWeight >= 20 && watchedWeight <= 300;
   const bmi = useMemo(() => {
-    if (!watchedHeight || !watchedWeight) return 0;
+    if (!hasValidBodyMeasurements) return null;
     return Number((watchedWeight / ((watchedHeight / 100) ** 2)).toFixed(1));
-  }, [watchedHeight, watchedWeight]);
+  }, [hasValidBodyMeasurements, watchedHeight, watchedWeight]);
 
   const bmiCategory = useMemo(() => {
+    if (bmi === null) return { label: 'Enter height and weight', colour: 'default' };
     if (bmi < 18.5) return { label: 'Underweight', colour: 'blue' };
     if (bmi < 25) return { label: 'Normal weight', colour: 'green' };
     if (bmi < 30) return { label: 'Overweight', colour: 'orange' };
@@ -148,17 +181,35 @@ export default function Onboarding() {
 
   return (
     <div className="mx-auto max-w-4xl rounded-3xl bg-white p-8 shadow-lg sm:p-10">
-      <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+      <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         Set up your profile so the app can generate a weekly plan that matches your goals.
       </div>
-      <StepProgress currentStep={currentStep - 2} totalSteps={4} stepName={['Profile', 'Goal', 'Equipment', 'Availability'][Math.max(0, currentStep - 2)]} />
+      <div className="mb-6 flex items-center gap-2 overflow-x-auto pb-1">
+        {['Profile', 'Goals', 'Equipment', 'Availability'].map((stepName, index) => {
+          const stepNumber = index + 2;
+          const active = currentStep === stepNumber;
+          const complete = currentStep > stepNumber;
+          return (
+            <React.Fragment key={stepName}>
+              <div className="flex min-w-fit items-center gap-2">
+                <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${active || complete ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}>
+                  {complete ? '✓' : index + 1}
+                </span>
+                <span className={`text-sm font-medium ${active ? 'text-slate-900' : 'text-slate-500'}`}>{stepName}</span>
+              </div>
+              {index < 3 ? <span className="h-px min-w-5 flex-1 bg-slate-200" /> : null}
+            </React.Fragment>
+          );
+        })}
+      </div>
+      <StepProgress currentStep={currentStep - 1} totalSteps={4} stepName={['Profile', 'Goals', 'Equipment', 'Availability'][Math.max(0, currentStep - 2)]} />
       {error ? <AlertBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
       <form onSubmit={handleSubmit(currentStep === 5 ? onSubmit : onNext)} className="space-y-8">
         {currentStep === 2 && (
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
               <label htmlFor="age" className="block text-sm font-medium text-slate-700">Age</label>
-              <input id="age" type="number" {...register('age', { required: true, min: 13, max: 100 })} defaultValue={formData.age} className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none" />
+              <input id="age" type="number" {...register('age', { required: 'Age is required.', valueAsNumber: true, min: { value: 13, message: 'Age must be between 13 and 100.' }, max: { value: 100, message: 'Age must be between 13 and 100.' } })} defaultValue={formData.age} className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none" />
               {errors.age && <p className="mt-2 text-sm text-danger">Age must be between 13 and 100.</p>}
             </div>
             <div>
@@ -173,19 +224,19 @@ export default function Onboarding() {
             </div>
             <div>
               <label htmlFor="height_cm" className="block text-sm font-medium text-slate-700">Height (cm)</label>
-              <input id="height_cm" type="number" {...register('height_cm', { required: true, min: 50, max: 300 })} defaultValue={formData.height_cm} className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none" />
+              <input id="height_cm" type="number" {...register('height_cm', { required: 'Height is required.', valueAsNumber: true, min: { value: 50, message: 'Height should be between 50 and 300 cm.' }, max: { value: 300, message: 'Height should be between 50 and 300 cm.' } })} defaultValue={formData.height_cm} className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none" />
               {errors.height_cm && <p className="mt-2 text-sm text-danger">Height should be between 50 and 300 cm.</p>}
             </div>
             <div>
               <label htmlFor="weight_kg" className="block text-sm font-medium text-slate-700">Weight (kg)</label>
-              <input id="weight_kg" type="number" {...register('weight_kg', { required: true, min: 20, max: 300 })} defaultValue={formData.weight_kg} className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none" />
+              <input id="weight_kg" type="number" {...register('weight_kg', { required: 'Weight is required.', valueAsNumber: true, min: { value: 20, message: 'Weight should be between 20 and 300 kg.' }, max: { value: 300, message: 'Weight should be between 20 and 300 kg.' } })} defaultValue={formData.weight_kg} className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 focus:border-primary focus:outline-none" />
               {errors.weight_kg && <p className="mt-2 text-sm text-danger">Weight should be between 20 and 300 kg.</p>}
             </div>
             <div className="lg:col-span-2">
               <p className="mb-3 text-sm font-medium text-slate-700">Fitness level</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {['Beginner', 'Intermediate', 'Advanced'].map((level) => (
-                  <label key={level} className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3">
+                  <label key={level} className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2">
                     <input type="radio" value={level} {...register('fitness_level', { required: true })} defaultChecked={formData.fitness_level === level} />
                     <span>{level}</span>
                   </label>
@@ -193,7 +244,9 @@ export default function Onboarding() {
               </div>
             </div>
             <div className="lg:col-span-2">
-              <MetricCard label="BMI" value={bmi || '0.0'} delta={bmiCategory.label} colour={bmiCategory.colour} />
+              {bmi === null ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">Enter height and weight to see your BMI.</div>
+              ) : <MetricCard label="BMI" value={bmi} delta={bmiCategory.label} colour={bmiCategory.colour} />}
               <p className="mt-2 text-sm text-slate-500">BMI is for reference only and does not affect your workout plan.</p>
             </div>
           </div>

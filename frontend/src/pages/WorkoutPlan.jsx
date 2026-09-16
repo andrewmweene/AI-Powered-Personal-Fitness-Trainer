@@ -3,6 +3,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { getPlan, refreshPlan } from '../api/recommendations.js';
+import { getSessions } from '../api/sessions.js';
 import LoadingSpinner from '../components/ui/LoadingSpinner.jsx';
 import Button from '../components/ui/Button.jsx';
 import DayCard from '../components/workout/DayCard.jsx';
@@ -29,13 +30,15 @@ export default function WorkoutPlan() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [sessions, setSessions] = useState([]);
 
   useEffect(() => {
     async function loadPlan() {
       setError('');
       try {
-        const data = await getPlan();
+        const [data, sessionData] = await Promise.all([getPlan(), getSessions()]);
         setPlan(normalizePlan(data));
+        setSessions(sessionData);
       } catch (apiError) {
         setError(apiError.response?.data?.detail || 'Unable to load workout plan.');
       } finally {
@@ -60,6 +63,18 @@ export default function WorkoutPlan() {
   };
 
   const todayIndex = useMemo(() => (new Date().getDay() + 6) % 7, []);
+  const completedDays = useMemo(() => {
+    const start = plan?.week_start_date ? new Date(`${plan.week_start_date}T12:00:00`) : null;
+    return new Set((sessions || []).filter((session) => {
+      if (!start || !session.created_at) return false;
+      const date = new Date(session.created_at);
+      const offset = Math.floor((date - start) / 86400000);
+      return offset >= 0 && offset < 7;
+    }).map((session) => {
+      const date = new Date(session.created_at);
+      return Math.floor((date - start) / 86400000);
+    }));
+  }, [plan, sessions]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -90,13 +105,14 @@ export default function WorkoutPlan() {
         </div>
         <Button variant="primary" onClick={handleRefresh} loading={refreshing}>Refresh plan</Button>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid items-start gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
         {plan?.days?.map((day, index) => (
           <DayCard
             key={day.name}
             dayName={weekdays[index] || day.name}
             plan={day}
             isToday={index === todayIndex}
+            completed={!day.is_rest && completedDays.has(index)}
           />
         ))}
       </div>

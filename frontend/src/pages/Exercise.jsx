@@ -311,6 +311,17 @@ export default function Exercise() {
                 playsInline
                 className="aspect-video w-full bg-black object-cover"
               />
+              <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-3 rounded-2xl bg-slate-950/75 px-4 py-3 text-white shadow-lg">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">Reps</p>
+                  <p className="text-2xl font-bold">{targetReps !== null ? `${repCount} / ${targetReps}` : repCount}</p>
+                </div>
+                <span className="h-9 w-px bg-white/30" />
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">State</p>
+                  <p className="text-lg font-semibold">{state || 'REST'}</p>
+                </div>
+              </div>
               <canvas className="pointer-events-none absolute inset-0 hidden" width="640" height="480" />
             </>
           ) : null}
@@ -326,26 +337,11 @@ export default function Exercise() {
           />
         </div>
 
-        <div className="grid gap-3 border-t border-slate-200 bg-white p-3 md:grid-cols-2">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'exercise'}
-            className={`${tabButtonBase} ${activeTab === 'exercise' ? 'bg-primary text-white' : 'border border-slate-200 bg-white text-slate-700'}`}
-            onClick={() => setActiveTab('exercise')}
-          >
-            <Play className="h-4 w-4" />
-            Start exercise
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'instructions'}
-            className={`${tabButtonBase} ${activeTab === 'instructions' ? 'bg-primary text-white' : 'border border-slate-200 bg-white text-slate-700'}`}
-            onClick={() => setActiveTab('instructions')}
-          >
+        <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3">
+          <span className="text-sm font-semibold text-slate-700">{mode === 'workout' ? currentWorkoutExercise?.exercise || exercise : exercise}</span>
+          <button type="button" onClick={() => setActiveTab(activeTab === 'instructions' ? 'exercise' : 'instructions')} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-blue-700">
             <HelpCircle className="h-4 w-4" />
-            How to do it
+            {activeTab === 'instructions' ? 'Back to session' : 'How to do it'}
           </button>
         </div>
 
@@ -353,7 +349,7 @@ export default function Exercise() {
           <div className="space-y-5 bg-slate-50 p-4 sm:p-5">
             {mode === 'single' ? (
               <label className="block text-sm font-medium text-slate-700">
-                Exercise
+                <span className="flex items-center justify-between">Exercise</span>
                 <select
                   value={exercise}
                   onChange={(e) => setExercise(e.target.value)}
@@ -368,12 +364,15 @@ export default function Exercise() {
             ) : null}
 
             <div className="flex flex-wrap gap-3">
-              <Button variant="primary" onClick={handleStart} disabled={!isReady || isRunning || (mode === 'workout' && isResting)}>
-                {mode === 'workout' ? 'Start set' : 'Start session'}
+              <Button variant={isRunning ? 'secondary' : 'primary'} onClick={isRunning ? handleStop : handleStart} disabled={!isReady || (mode === 'workout' && isResting)}>
+                {isRunning ? <Square className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                {isRunning ? 'Stop session' : mode === 'workout' ? 'Start set' : 'Start session'}
               </Button>
-              <Button variant="danger" onClick={handleStop} disabled={!isRunning && !isResting}>
-                {mode === 'workout' ? 'Pause workout' : 'Stop session'}
-              </Button>
+              {isResting && !isRunning ? (
+                <Button variant="secondary" onClick={handleStop}>
+                  End workout
+                </Button>
+              ) : null}
               {mode === 'workout' && isResting ? (
                 <Button variant="secondary" onClick={handleSkipRest} className="gap-2">
                   <TimerReset className="h-4 w-4" />

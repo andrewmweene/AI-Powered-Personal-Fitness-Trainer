@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):
-    username: str
+    username: str = Field(min_length=3, max_length=50)
     email: EmailStr
-    password: str
-    age: int | None = None
-    fitness_level: str | None = None
-    goal: str | None = None
+    password: str = Field(min_length=8, max_length=128)
+    age: int | None = Field(default=None, ge=13, le=100)
+    fitness_level: Literal["beginner", "intermediate", "advanced"] = "beginner"
+    goal: Literal["weight_loss", "muscle_gain", "strength_training", "endurance", "general_fitness", "flexibility", "sports_specific"] | None = None
 
 
 class UserResponse(BaseModel):
@@ -35,17 +35,17 @@ class Token(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class SessionCreate(BaseModel):
-    exercise_type: str
-    total_reps: int
-    correct_reps: int
-    incorrect_reps: int
-    posture_accuracy: float | None = None
-    duration_seconds: int | None = None
+    exercise_type: Literal["Squat", "Bicep Curl", "Push-up", "Dumbbell Fly", "Dumbbell Kickback"]
+    total_reps: int = Field(ge=0, le=1000)
+    correct_reps: int = Field(ge=0, le=1000)
+    incorrect_reps: int = Field(ge=0, le=1000)
+    posture_accuracy: float | None = Field(default=None, ge=0, le=100)
+    duration_seconds: int | None = Field(default=None, ge=0, le=86400)
 
 
 class SessionResponse(SessionCreate):

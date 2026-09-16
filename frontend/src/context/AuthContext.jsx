@@ -3,7 +3,8 @@
  * Restores user state from the token and supplies login/logout helpers.
  */
 import React, { createContext, useEffect, useState } from 'react';
-import { getMe } from '../api/auth.js';
+import { getMe, logout as logoutApi, refresh } from '../api/auth.js';
+import { clearAccessToken, setAccessToken } from '../api/client.js';
 
 export const AuthContext = createContext(null);
 
@@ -13,19 +14,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (!storedToken) {
-      setLoading(false);
-      return;
-    }
-
     async function restore() {
       try {
-        setToken(storedToken);
+        const restoredToken = await refresh();
+        setAccessToken(restoredToken);
+        setToken(restoredToken);
         const userData = await getMe();
         setUser(userData);
       } catch (error) {
-        localStorage.removeItem('token');
+        clearAccessToken();
         setToken(null);
         setUser(null);
       } finally {
@@ -37,13 +34,18 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = (newToken, userData) => {
-    localStorage.setItem('token', newToken);
+    setAccessToken(newToken);
     setToken(newToken);
     setUser(userData);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
+  const logout = async () => {
+    try {
+      await logoutApi();
+    } catch (error) {
+      // Clear local auth state even if the server session has already expired.
+    }
+    clearAccessToken();
     setToken(null);
     setUser(null);
     window.location.href = '/';

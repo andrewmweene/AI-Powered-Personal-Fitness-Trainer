@@ -71,7 +71,7 @@ export default function ModeSelector({ onSelectSingle, onSelectFullWorkout, toda
               disabled={isLoading || isRestDay}
               className={`mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition ${
                 isLoading || isRestDay
-                  ? 'cursor-not-allowed bg-slate-200 text-slate-500'
+                  ? 'cursor-not-allowed border border-slate-300 bg-slate-300 text-slate-600'
                   : 'bg-primary text-white hover:bg-blue-600'
               }`}
             >
@@ -81,7 +81,7 @@ export default function ModeSelector({ onSelectSingle, onSelectFullWorkout, toda
         </div>
 
         <div className="mt-8 text-center">
-          <Link to="/plan" className="inline-flex items-center text-sm font-medium text-primary transition hover:text-blue-700">
+          <Link to="/plan" className="inline-flex items-center rounded-full bg-blue-50 px-5 py-2.5 text-sm font-semibold text-primary transition hover:bg-blue-100 hover:text-blue-700">
             Set up my plan →
           </Link>
         </div>

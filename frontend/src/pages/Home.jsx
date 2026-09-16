@@ -53,7 +53,6 @@ export default function Home() {
     setLoading(true);
     try {
       const token = await loginApi(form.username, form.password);
-      localStorage.setItem('token', token);
       const userData = await getMe();
       login(token, userData);
       const statusData = await getStatus();
@@ -97,7 +96,6 @@ export default function Home() {
     setLoading(true);
     try {
       const token = await loginApi(DEMO_USER.username, DEMO_USER.password);
-      localStorage.setItem('token', token);
       const userData = await getMe();
       login(token, userData);
       const statusData = await getStatus();

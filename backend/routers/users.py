@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 import logging
 
 from .. import auth
 from ..dependencies import get_db, get_current_user
 from ..models import User
-from ..schemas import Token, UserCreate, UserResponse, LoginRequest
+from ..schemas import UserCreate, UserResponse, LoginRequest
+from .auth import _authenticate, _set_refresh_cookie, limiter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,34 +37,15 @@ def register_user(user_in: UserCreate, db: Session = Depends(get_db)) -> User:
     return user
 
 
-@router.post("/token", response_model=Token)
-def login(credentials: LoginRequest, db: Session = Depends(get_db)) -> Token:
-    """Authenticate a user and return a JWT access token."""
-    user = db.query(User).filter(User.username == credentials.username).first()
-    if user is None:
-        logger.debug("Login attempt with unknown username: %s", credentials.username)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
-    verified = auth.verify_password(credentials.password, user.hashed_password)
-    if not verified:
-        logger.debug("Password verification failed for user: %s", credentials.username)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
+@router.post("/token")
+@router.post("/login")
+@limiter.limit("5/minute")
+def legacy_login(request: Request, response: Response, credentials: LoginRequest, db: Session = Depends(get_db)) -> dict[str, str]:
+    """Compatibility login aliases using the same secure cookie flow."""
+    user = _authenticate(credentials, db)
     access_token = auth.create_access_token(data={"sub": str(user.id)})
-    return Token(access_token=access_token)
-
-
-@router.post("/login", response_model=Token)
-def login_user(credentials: LoginRequest, db: Session = Depends(get_db)) -> Token:
-    """Authenticate a user and return a JWT access token (login alias)."""
-    user = db.query(User).filter(User.username == credentials.username).first()
-    if user is None:
-        logger.debug("Login_user attempt with unknown username: %s", credentials.username)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
-    verified = auth.verify_password(credentials.password, user.hashed_password)
-    if not verified:
-        logger.debug("Login_user password verification failed for user: %s", credentials.username)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
-    access_token = auth.create_access_token(data={"sub": str(user.id)})
-    return Token(access_token=access_token)
+    _set_refresh_cookie(response, auth.create_refresh_token(str(user.id), db))
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.get("/me", response_model=UserResponse)
