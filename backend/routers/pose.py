@@ -4,6 +4,8 @@ Accepts a JPEG frame and returns angle, state, rep counts and feedback.
 """
 from __future__ import annotations
 
+import math
+
 from fastapi import APIRouter, UploadFile, Form, Depends
 import numpy as np
 import cv2
@@ -35,6 +37,26 @@ EXERCISES = {
 _session_machines: dict[str, ExerciseStateMachine] = {}
 
 
+def _serialize_landmarks(landmarks) -> list[dict[str, float | None] | None]:
+    """Return normalized coordinates without inventing missing joint data."""
+    serialized = []
+    for landmark in landmarks:
+        x = getattr(landmark, "x", None)
+        y = getattr(landmark, "y", None)
+        visibility = getattr(landmark, "visibility", None)
+        if not all(isinstance(value, (int, float)) and math.isfinite(value) for value in (x, y)):
+            serialized.append(None)
+            continue
+
+        serialized.append({
+            "x": float(x),
+            "y": float(y),
+            "z": float(landmark.z) if isinstance(getattr(landmark, "z", None), (int, float)) else None,
+            "visibility": float(visibility) if isinstance(visibility, (int, float)) and math.isfinite(visibility) else None,
+        })
+    return serialized
+
+
 @router.post("/analyse-frame")
 async def analyse_frame(
     file: UploadFile,
@@ -58,6 +80,7 @@ async def analyse_frame(
             "correct_reps": 0,
             "incorrect_reps": 0,
             "accuracy": 0,
+            "landmarks": [],
         }
 
     # Convert to RGB for detector
@@ -74,9 +97,11 @@ async def analyse_frame(
             "correct_reps": 0,
             "incorrect_reps": 0,
             "accuracy": 0,
+            "landmarks": [],
         }
 
     landmarks = results.pose_landmarks[0]
+    serialized_landmarks = _serialize_landmarks(landmarks)
 
     exercise_obj = EXERCISES.get(exercise)
     if exercise_obj is None:
@@ -88,6 +113,7 @@ async def analyse_frame(
             "correct_reps": 0,
             "incorrect_reps": 0,
             "accuracy": 0,
+            "landmarks": serialized_landmarks,
         }
 
     valid_pose, pose_feedback = exercise_obj.is_valid_pose(landmarks, frame.shape)
@@ -100,6 +126,7 @@ async def analyse_frame(
             "correct_reps": 0,
             "incorrect_reps": 0,
             "accuracy": 0,
+            "landmarks": serialized_landmarks,
         }
 
     angle_landmarks = exercise_obj.get_angle_landmarks()
@@ -114,6 +141,7 @@ async def analyse_frame(
             "correct_reps": 0,
             "incorrect_reps": 0,
             "accuracy": 0,
+            "landmarks": serialized_landmarks,
         }
 
     try:
@@ -157,4 +185,5 @@ async def analyse_frame(
         "correct_reps": correct,
         "incorrect_reps": incorrect,
         "accuracy": accuracy,
+        "landmarks": serialized_landmarks,
     }

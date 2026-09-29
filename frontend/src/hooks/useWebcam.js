@@ -3,11 +3,12 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
-export default function useWebcam({ width = 640, height = 480, enabled = true } = {}) {
+export default function useWebcam({ width = 640, height = 480, enabled = true, deviceId = '' } = {}) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState(null);
+  const [streamVersion, setStreamVersion] = useState(0);
 
   useEffect(() => {
     if (!enabled) {
@@ -25,12 +26,23 @@ export default function useWebcam({ width = 640, height = 480, enabled = true } 
     canvasRef.current.height = height;
 
     let stream;
+    let isCancelled = false;
+    setIsReady(false);
+    setStreamVersion((version) => version + 1);
 
     async function startCamera() {
       try {
+        const videoConstraints = { width, height };
+        if (deviceId) {
+          videoConstraints.deviceId = { exact: deviceId };
+        }
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width, height },
+          video: videoConstraints,
         });
+        if (isCancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.play().catch(() => {
@@ -41,18 +53,28 @@ export default function useWebcam({ width = 640, height = 480, enabled = true } 
           }
         }
       } catch (captureError) {
-        setError('Unable to access the camera. Please allow webcam access.');
+        if (!isCancelled) {
+          setIsReady(false);
+          if (captureError.name === 'NotAllowedError' || captureError.name === 'SecurityError') {
+            setError('Camera permission was denied. Allow camera access in your browser settings to use pose tracking.');
+          } else if (captureError.name === 'NotFoundError' || captureError.name === 'OverconstrainedError') {
+            setError('The selected camera is unavailable. Choose another camera or reconnect it.');
+          } else {
+            setError('Unable to access the camera. Check your browser permissions and camera connection.');
+          }
+        }
       }
     }
 
     startCamera();
 
     return () => {
+      isCancelled = true;
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [enabled, height, width]);
+  }, [deviceId, enabled, height, width]);
 
   useEffect(() => {
     if (!enabled) {
@@ -78,5 +100,5 @@ export default function useWebcam({ width = 640, height = 480, enabled = true } 
     };
   }, [enabled]);
 
-  return { videoRef, canvasRef, isReady, error };
+  return { videoRef, canvasRef, isReady, error, streamVersion };
 }

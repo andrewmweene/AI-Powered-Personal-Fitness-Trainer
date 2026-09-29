@@ -1,10 +1,11 @@
 /**
  * Live exercise session page using webcam feed and pose analysis.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HelpCircle, Play, Square, TimerReset } from 'lucide-react';
 import useWebcam from '../hooks/useWebcam.js';
+import useCameraDevices from '../hooks/useCameraDevices.js';
 import usePoseSession from '../hooks/usePoseSession.js';
 import Button from '../components/ui/Button.jsx';
 import AlertBanner from '../components/ui/AlertBanner.jsx';
@@ -14,6 +15,7 @@ import ModeSelector from '../components/exercise/ModeSelector.jsx';
 import WorkoutProgress from '../components/exercise/WorkoutProgress.jsx';
 import FeedbackPanel from '../components/exercise/FeedbackPanel.jsx';
 import ExerciseInstructions from './ExerciseInstructions.jsx';
+import { drawPoseOverlay, resizePoseOverlay } from '../utils/poseOverlay.js';
 
 const exercises = ['Squat', 'Bicep Curl', 'Push-up', 'Dumbbell Fly', 'Dumbbell Kickback'];
 
@@ -35,18 +37,46 @@ export default function Exercise() {
   const [saveError, setSaveError] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const overlayCanvasRef = useRef(null);
+  const landmarksRef = useRef([]);
 
-  const { videoRef, canvasRef, isReady, error } = useWebcam({ width: 640, height: 480, enabled: mode !== null });
+  const { devices, selectedDeviceId, selectDevice, error: cameraDeviceError } = useCameraDevices({ enabled: mode !== null });
+  const { videoRef, canvasRef, isReady, error: cameraError, streamVersion } = useWebcam({
+    width: 640,
+    height: 480,
+    enabled: mode !== null,
+    deviceId: selectedDeviceId,
+  });
   const [sessionId] = useState(() => (window.crypto?.randomUUID ? window.crypto.randomUUID() : `session-${Math.random().toString(36).slice(2)}`));
   const [isRunning, setIsRunning] = useState(false);
   const [startedAt, setStartedAt] = useState(null);
-  const { state, feedback, repCount, correctReps, incorrectReps, accuracy, isAnalysing, reset } = usePoseSession({
+  const { state, feedback, repCount, correctReps, incorrectReps, accuracy, landmarks, isAnalysing, reset } = usePoseSession({
     exercise: mode === 'workout' ? (todaysPlan?.exercises?.[currentExerciseIndex]?.exercise || exercise) : exercise,
     sessionId,
     isRunning,
     canvasRef,
     videoRef,
+    streamVersion,
   });
+
+  useEffect(() => {
+    landmarksRef.current = landmarks;
+    drawPoseOverlay(overlayCanvasRef.current, landmarks);
+  }, [landmarks]);
+
+  useEffect(() => {
+    if (mode === null || !overlayCanvasRef.current) {
+      return undefined;
+    }
+
+    const overlayCanvas = overlayCanvasRef.current;
+    const resize = () => resizePoseOverlay(overlayCanvas, landmarksRef.current);
+    resize();
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(overlayCanvas);
+    return () => observer.disconnect();
+  }, [mode]);
 
   const currentWorkoutExercise = mode === 'workout' ? todaysPlan?.exercises?.[currentExerciseIndex] : null;
   const workoutReady = mode === 'workout' && todaysPlan?.exercises?.length;
@@ -294,7 +324,7 @@ export default function Exercise() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5 pb-10">
-      {error ? <AlertBanner type="error" message={error} onDismiss={() => {}} /> : null}
+      {cameraDeviceError || cameraError ? <AlertBanner type="error" message={cameraDeviceError || cameraError} onDismiss={() => {}} /> : null}
 
       {mode === 'workout' && workoutReady ? (
         <WorkoutProgress exercises={todaysPlan.exercises} currentIndex={currentExerciseIndex} completedSets={completedSets} />
@@ -309,7 +339,7 @@ export default function Exercise() {
                 autoPlay
                 muted
                 playsInline
-                className="aspect-video w-full bg-black object-cover"
+                className="block h-auto w-full bg-black object-contain"
               />
               <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-3 rounded-2xl bg-slate-950/75 px-4 py-3 text-white shadow-lg">
                 <div>
@@ -322,7 +352,11 @@ export default function Exercise() {
                   <p className="text-lg font-semibold">{state || 'REST'}</p>
                 </div>
               </div>
-              <canvas className="pointer-events-none absolute inset-0 hidden" width="640" height="480" />
+              <canvas
+                ref={overlayCanvasRef}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 h-full w-full"
+              />
             </>
           ) : null}
         </div>
@@ -347,21 +381,39 @@ export default function Exercise() {
 
         {activeTab === 'exercise' ? (
           <div className="space-y-5 bg-slate-50 p-4 sm:p-5">
-            {mode === 'single' ? (
-              <label className="block text-sm font-medium text-slate-700">
-                <span className="flex items-center justify-between">Exercise</span>
-                <select
-                  value={exercise}
-                  onChange={(e) => setExercise(e.target.value)}
-                  disabled={isRunning}
-                  className="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary"
-                >
-                  {exercises.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+            <div className={mode === 'single' ? 'grid gap-4 sm:grid-cols-2' : ''}>
+              {mode === 'single' ? (
+                <label className="block text-sm font-medium text-slate-700">
+                  <span className="flex items-center justify-between">Exercise</span>
+                  <select
+                    value={exercise}
+                    onChange={(e) => setExercise(e.target.value)}
+                    disabled={isRunning}
+                    className="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary"
+                  >
+                    {exercises.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {devices.length > 1 ? (
+                <label className="block text-sm font-medium text-slate-700">
+                  <span className="flex items-center justify-between">Camera</span>
+                  <select
+                    value={selectedDeviceId}
+                    onChange={(e) => selectDevice(e.target.value)}
+                    className="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary"
+                  >
+                    {devices.map((device, index) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Camera ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
 
             <div className="flex flex-wrap gap-3">
               <Button variant={isRunning ? 'secondary' : 'primary'} onClick={isRunning ? handleStop : handleStart} disabled={!isReady || (mode === 'workout' && isResting)}>
