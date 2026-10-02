@@ -17,3 +17,7 @@ export async function analyseFrame(blob, exercise, sessionId, signal) {
   });
   return response.data;
 }
+
+export async function clearSession(sessionId) {
+  await client.delete(`/pose/session/${sessionId}`).catch(() => {});
+}

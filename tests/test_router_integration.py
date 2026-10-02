@@ -158,6 +158,22 @@ def test_pose_router_happy_path(client_and_token) -> None:
     )
     assert response.status_code == 200
     assert response.json()["feedback"] == "Invalid image"
+    assert response.json()["rep_completed"] is False
+    assert response.json()["rep_count"] == 0
+
+
+def test_pose_session_status_and_cleanup_routes(client_and_token) -> None:
+    client, token = client_and_token
+    session_id = "pose-lifecycle-session"
+    headers = auth_headers(token)
+
+    status_response = client.get(f"/pose/session/{session_id}/status", headers=headers)
+    assert status_response.status_code == 200
+    assert status_response.json()["active"] is False
+
+    clear_response = client.delete(f"/pose/session/{session_id}", headers=headers)
+    assert clear_response.status_code == 200
+    assert clear_response.json() == {"cleared": False, "session_id": session_id}
 
 
 def test_pose_router_requires_auth(client_and_token) -> None:

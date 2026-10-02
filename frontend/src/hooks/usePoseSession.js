@@ -2,7 +2,7 @@
  * Hook for running a pose analysis session using a webcam canvas.
  */
 import { useEffect, useState } from 'react';
-import { analyseFrame } from '../api/pose.js';
+import { analyseFrame, clearSession } from '../api/pose.js';
 
 const FRAME_INTERVAL_MS = 250;
 const INITIAL_BACKOFF_MS = 1000;
@@ -33,6 +33,7 @@ export default function usePoseSession({ exercise, sessionId, isRunning, canvasR
   const [incorrectReps, setIncorrectReps] = useState(0);
   const [accuracy, setAccuracy] = useState(0);
   const [landmarks, setLandmarks] = useState([]);
+  const [poseDetected, setPoseDetected] = useState(false);
   const [isAnalysing, setIsAnalysing] = useState(false);
 
   const reset = () => {
@@ -44,6 +45,7 @@ export default function usePoseSession({ exercise, sessionId, isRunning, canvasR
     setIncorrectReps(0);
     setAccuracy(0);
     setLandmarks([]);
+    setPoseDetected(false);
     setIsAnalysing(false);
   };
 
@@ -77,6 +79,9 @@ export default function usePoseSession({ exercise, sessionId, isRunning, canvasR
 
           setIsAnalysing(true);
           const response = await analyseFrame(blob, exercise, sessionId, controller.signal);
+          if (import.meta.env.DEV) {
+            console.log('Pose API response:', response);
+          }
           if (isStopped) {
             return;
           }
@@ -88,6 +93,7 @@ export default function usePoseSession({ exercise, sessionId, isRunning, canvasR
           setIncorrectReps(response.incorrect_reps ?? 0);
           setAccuracy(response.accuracy ?? 0);
           setLandmarks(Array.isArray(response.landmarks) ? response.landmarks : []);
+          setPoseDetected(response.pose_detected ?? false);
           backoffMs = INITIAL_BACKOFF_MS;
         } catch (error) {
           if (isStopped) {
@@ -120,9 +126,16 @@ export default function usePoseSession({ exercise, sessionId, isRunning, canvasR
       isStopped = true;
       controller.abort();
       setLandmarks([]);
+      setPoseDetected(false);
       setIsAnalysing(false);
     };
   }, [canvasRef, exercise, isRunning, sessionId, streamVersion, videoRef]);
 
-  return { angle, state, feedback, repCount, correctReps, incorrectReps, accuracy, landmarks, isAnalysing, reset };
+  useEffect(() => {
+    if (!isRunning && sessionId) {
+      clearSession(sessionId);
+    }
+  }, [isRunning, sessionId]);
+
+  return { angle, state, feedback, repCount, correctReps, incorrectReps, accuracy, landmarks, poseDetected, isAnalysing, reset };
 }

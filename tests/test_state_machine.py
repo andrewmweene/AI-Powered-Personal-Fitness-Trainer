@@ -28,6 +28,32 @@ def test_state_machine_updates_and_counts_reps() -> None:
 
     assert state == machine.REST
     assert rep_completed is True
+    assert machine.correct_count == 1
+    assert machine.incorrect_count == 0
+
+
+def test_repeated_frames_in_same_state_do_not_count_as_invalid_transitions() -> None:
+    machine = ExerciseStateMachine()
+    thresholds = {"rest": 160.0, "transition": 100.0, "complete": 40.0}
+
+    for _ in range(8):
+        state, rep_completed = machine.update(170.0, thresholds)
+        assert state == machine.REST
+        assert rep_completed is False
+
+    assert machine.correct_count == 0
+    assert machine.incorrect_count == 0
+
+
+def test_return_to_rest_without_complete_counts_incorrect_rep() -> None:
+    machine = ExerciseStateMachine()
+    thresholds = {"rest": 160.0, "transition": 100.0, "complete": 40.0}
+
+    for angle in (170.0, 120.0, 170.0):
+        machine.update(angle, thresholds)
+
+    assert machine.correct_count == 0
+    assert machine.incorrect_count == 1
 
 
 def test_exercise_angle_landmarks_use_the_correct_joint_triplets() -> None:

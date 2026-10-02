@@ -15,7 +15,6 @@ import ModeSelector from '../components/exercise/ModeSelector.jsx';
 import WorkoutProgress from '../components/exercise/WorkoutProgress.jsx';
 import FeedbackPanel from '../components/exercise/FeedbackPanel.jsx';
 import ExerciseInstructions from './ExerciseInstructions.jsx';
-import { drawPoseOverlay, resizePoseOverlay } from '../utils/poseOverlay.js';
 
 const exercises = ['Squat', 'Bicep Curl', 'Push-up', 'Dumbbell Fly', 'Dumbbell Kickback'];
 
@@ -37,8 +36,7 @@ export default function Exercise() {
   const [saveError, setSaveError] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const overlayCanvasRef = useRef(null);
-  const landmarksRef = useRef([]);
+  const canvasOverlayRef = useRef(null);
 
   const { devices, selectedDeviceId, selectDevice, error: cameraDeviceError } = useCameraDevices({ enabled: mode !== null });
   const { videoRef, canvasRef, isReady, error: cameraError, streamVersion } = useWebcam({
@@ -50,7 +48,7 @@ export default function Exercise() {
   const [sessionId] = useState(() => (window.crypto?.randomUUID ? window.crypto.randomUUID() : `session-${Math.random().toString(36).slice(2)}`));
   const [isRunning, setIsRunning] = useState(false);
   const [startedAt, setStartedAt] = useState(null);
-  const { state, feedback, repCount, correctReps, incorrectReps, accuracy, landmarks, isAnalysing, reset } = usePoseSession({
+  const { state, feedback, repCount, correctReps, incorrectReps, accuracy, landmarks, poseDetected, isAnalysing, reset } = usePoseSession({
     exercise: mode === 'workout' ? (todaysPlan?.exercises?.[currentExerciseIndex]?.exercise || exercise) : exercise,
     sessionId,
     isRunning,
@@ -59,24 +57,63 @@ export default function Exercise() {
     streamVersion,
   });
 
-  useEffect(() => {
-    landmarksRef.current = landmarks;
-    drawPoseOverlay(overlayCanvasRef.current, landmarks);
-  }, [landmarks]);
+  const POSE_CONNECTIONS = [
+    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+    [11, 23], [12, 24], [23, 24],
+    [23, 25], [25, 27], [27, 29], [27, 31],
+    [24, 26], [26, 28], [28, 30], [28, 32],
+    [0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8],
+    [9, 10], [15, 17], [15, 19], [15, 21], [16, 18], [16, 20], [16, 22],
+  ];
 
   useEffect(() => {
-    if (mode === null || !overlayCanvasRef.current) {
-      return undefined;
-    }
+    const canvas = canvasOverlayRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return undefined;
 
-    const overlayCanvas = overlayCanvasRef.current;
-    const resize = () => resizePoseOverlay(overlayCanvas, landmarksRef.current);
-    resize();
+    const draw = () => {
+      const width = video.clientWidth || 640;
+      const height = video.clientHeight || 480;
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
 
-    const observer = new ResizeObserver(resize);
-    observer.observe(overlayCanvas);
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      context.clearRect(0, 0, width, height);
+      if (!Array.isArray(landmarks) || landmarks.length === 0) return;
+
+      context.strokeStyle = '#00FF00';
+      context.lineWidth = 2;
+      POSE_CONNECTIONS.forEach(([startIndex, endIndex]) => {
+        const start = landmarks[startIndex];
+        const end = landmarks[endIndex];
+        if (!start || !end || (start.visibility ?? 0) < 0.5 || (end.visibility ?? 0) < 0.5) return;
+        context.beginPath();
+        context.moveTo(start.x * width, start.y * height);
+        context.lineTo(end.x * width, end.y * height);
+        context.stroke();
+      });
+
+      landmarks.forEach((landmark, index) => {
+        if (!landmark || (landmark.visibility ?? 0) < 0.5) return;
+        const x = landmark.x * width;
+        const y = landmark.y * height;
+        context.beginPath();
+        context.arc(x, y, 5, 0, Math.PI * 2);
+        context.fillStyle = '#FFFFFF';
+        context.fill();
+        context.beginPath();
+        context.arc(x, y, 3, 0, Math.PI * 2);
+        context.fillStyle = index <= 10 ? '#2196F3' : index <= 22 ? '#4CAF50' : '#F44336';
+        context.fill();
+      });
+    };
+
+    draw();
+    const observer = new ResizeObserver(draw);
+    observer.observe(video);
     return () => observer.disconnect();
-  }, [mode]);
+  }, [landmarks, streamVersion, videoRef]);
 
   const currentWorkoutExercise = mode === 'workout' ? todaysPlan?.exercises?.[currentExerciseIndex] : null;
   const workoutReady = mode === 'workout' && todaysPlan?.exercises?.length;
@@ -331,7 +368,7 @@ export default function Exercise() {
       ) : null}
 
       <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-        <div className="relative overflow-hidden bg-black">
+        <div className="relative aspect-[4/3] overflow-hidden bg-black" style={{ aspectRatio: '4 / 3' }}>
           {mode !== null ? (
             <>
               <video
@@ -339,7 +376,8 @@ export default function Exercise() {
                 autoPlay
                 muted
                 playsInline
-                className="block h-auto w-full bg-black object-contain"
+                className="absolute inset-0 h-full w-full bg-black object-cover"
+                style={{ transform: 'scaleX(-1)' }}
               />
               <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-3 rounded-2xl bg-slate-950/75 px-4 py-3 text-white shadow-lg">
                 <div>
@@ -353,10 +391,16 @@ export default function Exercise() {
                 </div>
               </div>
               <canvas
-                ref={overlayCanvasRef}
+                ref={canvasOverlayRef}
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 h-full w-full"
+                style={{ transform: 'scaleX(-1)' }}
               />
+              {isRunning && !poseDetected ? (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <p className="rounded-full bg-black/60 px-4 py-2 text-sm text-white">Step into the camera frame</p>
+                </div>
+              ) : null}
             </>
           ) : null}
         </div>
