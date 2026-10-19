@@ -20,12 +20,13 @@ COOKIE_PATH = "/auth"
 
 
 def _set_refresh_cookie(response: Response, raw_token: str) -> None:
+    is_production = os.getenv("ENV", "development").lower() == "production"
     response.set_cookie(
         key="refresh_token",
         value=raw_token,
         httponly=True,
-        secure=os.getenv("ENV", "development").lower() == "production",
-        samesite="strict",
+        secure=is_production,
+        samesite="none" if is_production else "strict",
         max_age=auth.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path=COOKIE_PATH,
     )

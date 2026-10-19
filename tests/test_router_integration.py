@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi import Response
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -21,6 +22,7 @@ from backend.dependencies import get_db as dependency_get_db  # noqa: E402
 from backend.models import RefreshToken, User, UserProfile  # noqa: E402
 from backend.database import get_db as database_get_db  # noqa: E402
 from backend.main import app  # noqa: E402
+from backend.routers.auth import _set_refresh_cookie  # noqa: E402
 
 
 TEST_DATABASE = create_engine(os.environ["DATABASE_URL"])
@@ -206,6 +208,18 @@ def test_auth_login_sets_cookie_and_short_access_token(client_and_token) -> None
     client, _ = client_and_token
     response = client.post("/auth/login", json={"username": "missing", "password": "Password123!"})
     assert response.status_code == 401
+
+
+def test_production_refresh_cookie_allows_cross_site_frontend(monkeypatch) -> None:
+    monkeypatch.setenv("ENV", "production")
+    response = Response()
+
+    _set_refresh_cookie(response, "test-token")
+
+    cookie = response.headers["set-cookie"].lower()
+    assert "samesite=none" in cookie
+    assert "secure" in cookie
+    assert "httponly" in cookie
 
 
 def test_auth_refresh_rotates_cookie(client_and_token) -> None:
