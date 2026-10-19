@@ -49,6 +49,13 @@ the same API and database layer.
 - `npm run dev`
 - Open `http://localhost:5173` (Vite default) to view the app.
 
+**Deploy the backend on Render and frontend on Vercel**
+- Create a Render Web Service from this repository. Use the repository root, the Docker runtime, and the root `Dockerfile`. Set the start command to `sh -c 'uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}'` and health check path to `/health`.
+- Set these Render environment variables: `DATABASE_URL` (Supabase PostgreSQL connection URI), `SECRET_KEY` (a strong random secret), `ENV=production`, `ENVIRONMENT=production`, and `ALLOWED_ORIGINS` (the exact Vercel frontend origin, without a trailing slash).
+- Create a separate Vercel project for the frontend and set its Root Directory to `frontend`. Use the Vite framework, build command `npm run build`, and output directory `dist`.
+- Set `VITE_API_BASE_URL` in Vercel to the Render service's base URL, for example `https://your-api.onrender.com` (no trailing slash or `/api` suffix). Set it for Production and Preview if you use preview deployments.
+- Apply the Supabase schema by running `alembic upgrade head` from an environment configured with the same `DATABASE_URL`. Do not commit database credentials or secrets.
+
 ## Screenshots
 
 ### Live Exercise Session
@@ -113,4 +120,3 @@ If you'd like, I can add a one-command `Makefile` / `scripts` to simplify these 
 5. Run `uvicorn backend.main:app --reload --port 8000`
 6. In a new terminal: `cd frontend && npm install && npm run dev`
 7. Open http://localhost:5173
-
