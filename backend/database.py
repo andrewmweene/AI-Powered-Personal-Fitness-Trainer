@@ -8,44 +8,36 @@ creates the SQLAlchemy engine, a `SessionLocal` factory, and exposes a
 from __future__ import annotations
 
 from typing import Generator
-import logging
 import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
-
-logger = logging.getLogger(__name__)
 
 # Load environment variables from a .env file in the project root if present
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 dotenv_path = os.path.join(project_root, ".env")
 load_dotenv(dotenv_path)
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 if not DATABASE_URL:
-    DATABASE_URL = "sqlite:///./fitness_trainer.db"
+    raise RuntimeError(
+        "DATABASE_URL is not set. "
+        "Copy .env.example to .env and fill in your Supabase connection string."
+    )
 
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+connect_args = {}
+if ENVIRONMENT == "production" and "supabase" in DATABASE_URL:
+    connect_args = {"sslmode": "require"}
 
-def _build_engine(url: str):
-    if url.startswith("sqlite"):
-        return create_engine(url)
-
-    try:
-        engine = create_engine(url, pool_pre_ping=True)
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        return engine
-    except Exception as error:
-        logger.warning(
-            "Could not connect to the configured database; falling back to local SQLite: %s",
-            error,
-        )
-        return create_engine("sqlite:///./fitness_trainer.db")
-
-
-# Create the SQLAlchemy engine
-engine = _build_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    echo=False,
+)
 
 # Session factory used by application code
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

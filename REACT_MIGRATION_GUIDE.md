@@ -794,7 +794,7 @@ from pose_engine.detector import PoseDetector
 from pose_engine.angle_utils import get_landmark_coords, calculate_angle
 from pose_engine.exercises.squat import Squat
 from pose_engine.exercises.bicep_curl import BicepCurl
-from pose_engine.exercises.pushup import Pushup
+from pose_engine.exercises.pushup import PushUp
 from pose_engine.exercises.dumbbell_fly import DumbbellFly
 from pose_engine.exercises.kickback import Kickback
 from backend.dependencies import get_current_user
@@ -807,7 +807,7 @@ detector = PoseDetector()
 EXERCISES = {
     "Squat":          Squat(),
     "Bicep Curl":     BicepCurl(),
-    "Push-up":        Pushup(),
+    "Push-up":        PushUp(),
     "Dumbbell Fly":   DumbbellFly(),
     "Dumbbell Kickback": Kickback(),
 }

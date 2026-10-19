@@ -1,5 +1,6 @@
 """FastAPI application entry point for the AI Personal Trainer backend."""
 
+from contextlib import asynccontextmanager
 import logging
 import os
 
@@ -18,22 +19,35 @@ from .database import Base, engine
 from .demo import ensure_demo_user
 
 
-app = FastAPI(title="AI Personal Trainer API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create database tables and seed the demo user at startup."""
+    Base.metadata.create_all(bind=engine)
+    ensure_demo_user()
+    yield
+
+
+app = FastAPI(
+    title="AI Personal Trainer API",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-frontend_origins = [
-    origin.strip()
-    for origin in os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").split(",")
-    if origin.strip()
-]
+_origins_raw = (
+    os.getenv("ALLOWED_ORIGINS")
+    or os.getenv("FRONTEND_ORIGIN")
+    or "http://localhost:5173,http://localhost:4173"
+)
+allowed_origins = [origin.strip() for origin in _origins_raw.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_origins,
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -45,13 +59,6 @@ app.include_router(recommendations, prefix="/recommendations", tags=["recommenda
 app.include_router(pose, prefix="/pose", tags=["pose"])
 app.include_router(measurements, prefix="/measurements", tags=["measurements"])
 app.include_router(auth, prefix="/auth", tags=["auth"])
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    """Ensure database tables are created on application startup (development only)."""
-    Base.metadata.create_all(bind=engine)
-    ensure_demo_user()
 
 
 @app.get("/health")
