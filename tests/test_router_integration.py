@@ -16,7 +16,7 @@ os.environ["SECRET_KEY"] = "integration-test-secret"
 os.environ["ENV"] = "test"
 
 from backend.auth import create_access_token, hash_password  # noqa: E402
-from backend.database import Base  # noqa: E402
+from backend.database import Base, _normalize_database_url  # noqa: E402
 from backend.dependencies import get_db as dependency_get_db  # noqa: E402
 from backend.models import RefreshToken, User, UserProfile  # noqa: E402
 from backend.database import get_db as database_get_db  # noqa: E402
@@ -87,6 +87,22 @@ def client_and_token():
 
 def auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.mark.parametrize(
+    ("database_url", "expected_driver"),
+    [
+        ("postgresql://user:secret@db.example.com:5432/app", "postgresql+psycopg2"),
+        ("postgresql+psycopg://user:secret@db.example.com:5432/app", "postgresql+psycopg2"),
+        ("postgresql+psycopg2://user:secret@db.example.com:5432/app", "postgresql+psycopg2"),
+        ("sqlite:///./test.db", "sqlite"),
+    ],
+)
+def test_database_url_uses_installed_postgres_driver(
+    database_url: str, expected_driver: str
+) -> None:
+    normalized_url = _normalize_database_url(database_url)
+    assert normalized_url.startswith(f"{expected_driver}://")
 
 
 def test_sessions_router_happy_path(client_and_token) -> None:

@@ -12,7 +12,17 @@ import os
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+
+def _normalize_database_url(database_url: str) -> str:
+    """Use the installed psycopg2 driver for PostgreSQL connection URLs."""
+    url = make_url(database_url)
+    if url.drivername in {"postgres", "postgresql", "postgresql+psycopg"}:
+        url = url.set(drivername="postgresql+psycopg2")
+    return url.render_as_string(hide_password=False)
+
 
 # Load environment variables from a .env file in the project root if present
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -25,6 +35,7 @@ if not DATABASE_URL:
         "DATABASE_URL is not set. "
         "Copy .env.example to .env and fill in your Supabase connection string."
     )
+DATABASE_URL = _normalize_database_url(DATABASE_URL)
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 connect_args = {}
